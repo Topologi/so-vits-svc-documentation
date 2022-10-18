@@ -1,32 +1,37 @@
 import gradio as gr
 import os
-os.system('cd monotonic_align && python setup.py build_ext --inplace && cd ..')
-
 import logging
-
-numba_logger = logging.getLogger('numba')
-numba_logger.setLevel(logging.WARNING)
-
 import librosa
 import torch
-
 import commons
 import utils
 from models import SynthesizerTrn
 from text.symbols import symbols
 from text import text_to_sequence
+import numpy as np
+
+os.system('cd monotonic_align && python setup.py build_ext --inplace && cd ..')
+
+numba_logger = logging.getLogger('numba')
+numba_logger.setLevel(logging.WARNING)
+
+
 def resize2d(source, target_len):
-    source[source<0.001] = np.nan
-    target = np.interp(np.arange(0, len(source)*target_len, len(source))/ target_len, np.arange(0, len(source)), source)
+    source[source < 0.001] = np.nan
+    target = np.interp(np.arange(0, len(source) * target_len, len(source)) / target_len, np.arange(0, len(source)),
+                       source)
     return np.nan_to_num(target)
+
+
 def convert_wav_22050_to_f0(audio):
     tmp = librosa.pyin(audio,
-                fmin=librosa.note_to_hz('C0'),
-                fmax=librosa.note_to_hz('C7'),
-                frame_length=1780)[0]
+                       fmin=librosa.note_to_hz('C0'),
+                       fmax=librosa.note_to_hz('C7'),
+                       frame_length=1780)[0]
     f0 = np.zeros_like(tmp)
-    f0[tmp>0] = tmp[tmp>0]
+    f0[tmp > 0] = tmp[tmp > 0]
     return f0
+
 
 def get_text(text, hps):
     text_norm = text_to_sequence(text, hps.data.text_cleaners)
@@ -44,15 +49,15 @@ net_g_ms = SynthesizerTrn(
     hps_ms.data.filter_length // 2 + 1,
     hps_ms.train.segment_size // hps.data.hop_length,
     n_speakers=hps_ms.data.n_speakers,
-    **hps_ms.model)
-
-import numpy as np
+    **hps_ms.model
+)
 
 hubert = torch.hub.load("bshall/hubert:main", "hubert_soft")
 
 _ = utils.load_checkpoint("G_312000.pth", net_g_ms, None)
 
-def vc_fn(input_audio,vc_transform):
+
+def vc_fn(input_audio, vc_transform):
     if input_audio is None:
         return "You need to upload an audio", None
     sampling_rate, audio = input_audio
@@ -82,11 +87,17 @@ def vc_fn(input_audio,vc_transform):
     with torch.no_grad():
         x_tst = stn_tst.unsqueeze(0)
         x_tst_lengths = torch.LongTensor([stn_tst.size(0)])
-        audio = net_g_ms.infer(x_tst, x_tst_lengths,sid=sid, noise_scale=0.1, noise_scale_w=0.1, length_scale=1)[0][
+        audio = net_g_ms.infer(x_tst,
+                               x_tst_lengths,
+                               # FIXME: what is hidden_channel?
+                               pitch=256,
+                               sid=sid,
+                               noise_scale=0.1,
+                               noise_scale_w=0.1,
+                               length_scale=1)[0][
             0, 0].data.float().numpy()
 
     return "Success", (hps.data.sampling_rate, audio)
-
 
 
 app = gr.Blocks()
@@ -94,10 +105,10 @@ with app:
     with gr.Tabs():
         with gr.TabItem("Basic"):
             vc_input3 = gr.Audio(label="Input Audio (30s limitation)")
-            vc_transform = gr.Number(label="transform",value=1.0)
+            vc_transform = gr.Number(label="transform", value=1.0)
             vc_submit = gr.Button("Convert", variant="primary")
             vc_output1 = gr.Textbox(label="Output Message")
             vc_output2 = gr.Audio(label="Output Audio")
-        vc_submit.click(vc_fn, [ vc_input3,vc_transform], [vc_output1, vc_output2])
+        vc_submit.click(vc_fn, [vc_input3, vc_transform], [vc_output1, vc_output2])
 
     app.launch()

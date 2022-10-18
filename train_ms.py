@@ -1,10 +1,10 @@
 import os
-import json
-import argparse
-import itertools
-import math
+# import json
+# import argparse
+# import itertools
+# import math
 import torch
-from torch import nn, optim
+# from torch import nn, optim
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -38,31 +38,65 @@ global_step = 0
 
 
 def main():
-    """Assume Single Node Multi GPUs Training Only"""
+    """假设单节点多GPU训练"""
     assert torch.cuda.is_available(), "CPU training is not allowed."
 
+    """查看当前设备 GPU 总数"""
     n_gpus = torch.cuda.device_count()
+    """设置主节点地址 PS: 这个端口不是MC端口吗"""
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '25565'
 
+    """ 从命令行中读取指令
+        指令结构: [-c 模型结构.json] [-m 模型存放位置]
+    """
     hps = utils.get_hparams()
+    """以 Pytorch 多线程姿态出击"""
     mp.spawn(run, nprocs=n_gpus, args=(n_gpus, hps,))
 
 
 def run(rank, n_gpus, hps):
+    # 声明全局步数
     global global_step
+    # 第一个子线程，将线程设置为 Log 线程
     if rank == 0:
         logger = utils.get_logger(hps.model_dir)
         logger.info(hps)
+        # 检查当前 .git 仓库的 hash，如果不一致则报警
         utils.check_git_hash(hps.model_dir)
+        # 创建新的 TensorBoard Writer，指定写出文件夹为模型存放位置的文件夹
         writer = SummaryWriter(log_dir=hps.model_dir)
+        # 同上，不过是用于模型 eval 时的日志
         writer_eval = SummaryWriter(log_dir=os.path.join(hps.model_dir, "eval"))
 
+    # 启动 torch 分布式，使用 nccl 后端，初始化方法为 env schema，世界大小和 gpu 数量同步，传入 rank
     dist.init_process_group(backend='nccl', init_method='env://', world_size=n_gpus, rank=rank)
+    # 加载手动设置的训练种子
     torch.manual_seed(hps.train.seed)
+    # 根据 rank 设置使用的显卡
     torch.cuda.set_device(rank)
 
+    """
+        在这里加载训练数据集
+        使用配置文件中声明的 training_files 的 txt 引导文件加载数据，同时传入一些从json中读取的配置项目
+        
+        text_cleaners: 
+        max_wav_value: 最大波值
+        sampling_rate: 训练音频采样率
+        filter_length: 
+        hop_length: 
+        win_length: 
+        sampling_rate: 
+        
+        cleaned_text: 
+        add_blank:
+        min_text_len: 最小文本长度 ( Sovits 中不是文本 )
+        max_text_len: 最大文本长度 ( Sovits 中不是文本 )
+    """
     train_dataset = TextAudioSpeakerLoader(hps.data.training_files, hps.data)
+
+    # 分布式训练采样器，用于使得输入训练数据的长度一致
+    # TODO("HERE")
     train_sampler = DistributedBucketSampler(
         train_dataset,
         hps.train.batch_size,
@@ -83,7 +117,9 @@ def run(rank, n_gpus, hps):
         len(symbols),
         hps.data.filter_length // 2 + 1,
         hps.train.segment_size // hps.data.hop_length,
+        #####################################
         n_speakers=hps.data.n_speakers,
+        #####################################
         **hps.model).cuda(rank)
     net_d = MultiPeriodDiscriminator(hps.model.use_spectral_norm).cuda(rank)
     optim_g = torch.optim.AdamW(
@@ -108,8 +144,6 @@ def run(rank, n_gpus, hps):
     except:
         epoch_str = 1
         global_step = 0
-    # epoch_str = 1
-    # global_step = 0
     scheduler_g = torch.optim.lr_scheduler.ExponentialLR(optim_g, gamma=hps.train.lr_decay, last_epoch=epoch_str - 2)
     scheduler_d = torch.optim.lr_scheduler.ExponentialLR(optim_d, gamma=hps.train.lr_decay, last_epoch=epoch_str - 2)
 
@@ -143,7 +177,9 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
         x, x_lengths = x.cuda(rank, non_blocking=True), x_lengths.cuda(rank, non_blocking=True)
         spec, spec_lengths = spec.cuda(rank, non_blocking=True), spec_lengths.cuda(rank, non_blocking=True)
         y, y_lengths = y.cuda(rank, non_blocking=True), y_lengths.cuda(rank, non_blocking=True)
+        #####################################
         speakers = speakers.cuda(rank, non_blocking=True)
+        #####################################
         pitch = pitch.cuda(rank, non_blocking=True)
 
         with autocast(enabled=hps.train.fp16_run):
@@ -248,7 +284,9 @@ def evaluate(hps, generator, eval_loader, writer_eval):
             x, x_lengths = x.cuda(0), x_lengths.cuda(0)
             spec, spec_lengths = spec.cuda(0), spec_lengths.cuda(0)
             y, y_lengths = y.cuda(0), y_lengths.cuda(0)
+            ###############################
             speakers = speakers.cuda(0)
+            ###############################
             pitch = pitch.cuda(0)
             # remove else
             x = x[:1]
@@ -257,7 +295,9 @@ def evaluate(hps, generator, eval_loader, writer_eval):
             spec_lengths = spec_lengths[:1]
             y = y[:1]
             y_lengths = y_lengths[:1]
+            ###############################
             speakers = speakers[:1]
+            ###############################
             break
         y_hat, attn, mask, *_ = generator.module.infer(x, x_lengths, pitch, speakers, max_len=1000)
         y_hat_lengths = mask.sum([1, 2]).long() * hps.data.hop_length

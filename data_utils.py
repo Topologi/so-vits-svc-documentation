@@ -59,7 +59,7 @@ class TextAudioLoader(torch.utils.data.Dataset):
 
     def get_audio_text_pair(self, audiopath_and_text):
         # separate filename and text
-        audiopath, text, pitch = audiopath_and_text[0], audiopath_and_text[1],audiopath_and_text[2]
+        audiopath, text, pitch = audiopath_and_text[0], audiopath_and_text[1], audiopath_and_text[2]
         text = self.get_text(text)
         spec, wav = self.get_audio(audiopath)
         pitch = self.get_pitch(pitch)
@@ -123,7 +123,6 @@ class TextAudioCollate():
         max_pitch_len = max([x[3].shape[0] for x in batch])
         # print(batch)
 
-
         text_lengths = torch.LongTensor(len(batch))
         spec_lengths = torch.LongTensor(len(batch))
         wav_lengths = torch.LongTensor(len(batch))
@@ -170,7 +169,30 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         3) computes spectrograms from audio files.
     """
 
+    """
+         在这里加载训练数据集
+         使用配置文件中声明的 training_files 的 txt 引导文件加载数据，同时传入一些从json中读取的配置项目
+
+         text_cleaners: 
+         max_wav_value: 最大波值
+         sampling_rate: 训练音频采样率
+         filter_length: 
+         hop_length: 
+         win_length: 
+         sampling_rate: 
+
+         cleaned_text: 
+         add_blank:
+         min_text_len: 最小文本长度 ( Sovits 中不是文本 )
+         max_text_len: 最大文本长度 ( Sovits 中不是文本 )
+     """
+
     def __init__(self, audiopaths_sid_text, hparams):
+        """
+            预处理并加载文本数据，该方法能够自动移除文本两边空格，文本数据结构如下：
+            something-text.txt (UTF-8)
+            音频路径|说话人ID|文本（当然在该模型中这不是文本）|声调 ?FIXME: 真的存在吗？
+        """
         self.audiopaths_sid_text = load_filepaths_and_text(audiopaths_sid_text)
         self.text_cleaners = hparams.text_cleaners
         self.max_wav_value = hparams.max_wav_value
@@ -178,7 +200,6 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         self.filter_length = hparams.filter_length
         self.hop_length = hparams.hop_length
         self.win_length = hparams.win_length
-        self.sampling_rate = hparams.sampling_rate
 
         self.cleaned_text = getattr(hparams, "cleaned_text", False)
 
@@ -186,7 +207,7 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         self.min_text_len = getattr(hparams, "min_text_len", 1)
         self.max_text_len = getattr(hparams, "max_text_len", 190)
 
-        random.seed(1234)
+        random.seed(getattr(hparams, "hparams.train_data_shuffle_seed", 1234))
         random.shuffle(self.audiopaths_sid_text)
         self._filter()
 
@@ -204,53 +225,99 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         self.lengths = lengths
 
     def get_audio_text_speaker_pair(self, audiopath_sid_text):
-        # separate filename, speaker_id and text
-        audiopath, sid, text, pitch = audiopath_sid_text[0], audiopath_sid_text[1], audiopath_sid_text[2], audiopath_sid_text[3]
+        """
+        将训练集的txt描述文件转换为真正的数据
+        text: HuBERT 语素
+        spec: 时频图
+        wav: 声音张量
+        pitch: 声调张量
+        sid: 说话人 ID 张量
+        """
+        # 分离文件名，说话人ID，文本，音调
+        (audiopath,
+         sid,
+         text,
+         pitch) = audiopath_sid_text[0], audiopath_sid_text[1], audiopath_sid_text[2], audiopath_sid_text[3]
+        """
+        该方法进行过改进，加载的并不是 text，实际上加载的是 HuBERT soft content encoder 处理后的多维向量
+        在加载完毕后使用 torch 转为浮点向量随后返回
+        """
         text = self.get_text(text)
         spec, wav = self.get_audio(audiopath)
+        # sid 转 torch 向量
         sid = self.get_sid(sid)
+        # 从磁盘加载音调文件
         pitch = self.get_pitch(pitch)
 
-        return (text, spec, wav, pitch, sid)
+        return text, spec, wav, pitch, sid
 
     def get_audio(self, filename):
+        """
+        将声音波形文件加载为时频图，同时返回转换为二维向量的声音张量
+        TODO("可以改写为使用 torchaudio 库直接加载")
+        """
         audio, sampling_rate = load_wav_to_torch(filename)
+        # 训练文件采样率和设置采样率不一样，报错
         if sampling_rate != self.sampling_rate:
             raise ValueError("{} {} SR doesn't match target {} SR".format(
                 sampling_rate, self.sampling_rate))
+        # 正则化（规则化）
         audio_norm = audio / self.max_wav_value
+        # 升维
+        # [1, 2, 3, 4, 5 ... 1000] => [[1, 2, 3, 4, 5 ... 1000]]
         audio_norm = audio_norm.unsqueeze(0)
+        # 修改文件名后缀
         spec_filename = filename.replace(".wav", ".spec.pt")
+        # 如果存以这个后缀结尾的文件（时频图）
         if os.path.exists(spec_filename):
+            # 直接加载
             spec = torch.load(spec_filename)
         else:
+            # 如果不存以这个后缀结尾的文件，将音频数据转换为时频图，升维后保存起来方便以后使用
             spec = spectrogram_torch(audio_norm, self.filter_length,
                                      self.sampling_rate, self.hop_length, self.win_length,
                                      center=False)
             spec = torch.squeeze(spec, 0)
             torch.save(spec, spec_filename)
+        # 返回时频图和正则化后的音频数据
         return spec, audio_norm
 
     def get_text(self, text):
+        """
+        该方法进行过改进，加载的并不是 text，实际上加载的是 HuBERT soft content encoder 处理后的多维向量
+        在加载完毕后使用 torch 转为浮点向量随后返回
+        """
         soft = np.load(text)
         text_norm = torch.FloatTensor(soft)
         return text_norm
-    
+
     def get_pitch(self, pitch):
+        """
+        从磁盘中加载音调文件 FIXME("是否是 F0?")
+        """
         return torch.LongTensor(np.load(pitch))
 
     def get_sid(self, sid):
         sid = torch.LongTensor([int(sid)])
         return sid
 
+    """
+        torch Dataset 用于加载数据的方法
+        在这里，该方法首先访问要加载的原始数据，随后将数据传入加载函数请求加载
+    """
+
     def __getitem__(self, index):
         return self.get_audio_text_speaker_pair(self.audiopaths_sid_text[index])
+
+    """
+        返回训练集长度
+    """
 
     def __len__(self):
         return len(self.audiopaths_sid_text)
 
 
-class TextAudioSpeakerCollate():
+class TextAudioSpeakerCollate:
     """ Zero-pads model inputs and targets
     """
 
@@ -310,14 +377,15 @@ class TextAudioSpeakerCollate():
 
         if self.return_ids:
             return text_padded, text_lengths, spec_padded, spec_lengths, wav_padded, wav_lengths, pitch_padded, sid, ids_sorted_decreasing
-        return text_padded, text_lengths, spec_padded, spec_lengths, wav_padded, wav_lengths,pitch_padded , sid
+        return text_padded, text_lengths, spec_padded, spec_lengths, wav_padded, wav_lengths, pitch_padded, sid
 
 
 class DistributedBucketSampler(torch.utils.data.distributed.DistributedSampler):
     """
     Maintain similar input lengths in a batch.
     Length groups are specified by boundaries.
-    Ex) boundaries = [b1, b2, b3] -> any batch is included either {x | b1 < length(x) <=b2} or {x | b2 < length(x) <= b3}.
+    Ex) boundaries = [b1, b2, b3] -> any batch is included either
+    {x | b1 < length(x) <=b2} or {x | b2 < length(x) <= b3}.
 
     It removes samples which are not included in the boundaries.
     Ex) boundaries = [b1, b2, b3] -> any x s.t. length(x) <= b1 or length(x) > b3 are discarded.
