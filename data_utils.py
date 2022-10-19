@@ -191,7 +191,7 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         """
             预处理并加载文本数据，该方法能够自动移除文本两边空格，文本数据结构如下：
             something-text.txt (UTF-8)
-            音频路径|说话人ID|文本（当然在该模型中这不是文本）|声调 ?FIXME: 真的存在吗？
+            音频路径 | 说话人ID | 文本（当然在该模型中这不是文本）| F0基频文件
         """
         self.audiopaths_sid_text = load_filepaths_and_text(audiopaths_sid_text)
         self.text_cleaners = hparams.text_cleaners
@@ -213,6 +213,7 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
 
     def _filter(self):
         """
+        为后续数据分桶过滤音素，存储其时频图长度
         Filter text & store spec lengths
         """
         # Store spectrogram lengths for Bucketing
@@ -260,7 +261,9 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         # 训练文件采样率和设置采样率不一样，报错
         if sampling_rate != self.sampling_rate:
             raise ValueError("{} {} SR doesn't match target {} SR".format(
-                sampling_rate, self.sampling_rate))
+                filename,
+                sampling_rate,
+                self.sampling_rate))
         # 正则化（规则化）
         audio_norm = audio / self.max_wav_value
         # 升维
@@ -293,7 +296,7 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
 
     def get_pitch(self, pitch):
         """
-        从磁盘中加载音调文件 FIXME("是否是 F0?")
+        从磁盘中加载F0基频(音调)文件
         """
         return torch.LongTensor(np.load(pitch))
 
@@ -392,7 +395,16 @@ class DistributedBucketSampler(torch.utils.data.distributed.DistributedSampler):
     """
 
     def __init__(self, dataset, batch_size, boundaries, num_replicas=None, rank=None, shuffle=True):
+        """
+            dataset: 数据集
+            batch_size: 一批训练数据的大小
+            boundaries: [32, 300, 400, 500, 600, 700, 800, 900, 1000]
+            num_replicas: 数据拷贝数量，和 GPU 数量一致
+            rank: 分布式序号
+            shuffle: 是否打乱训练集
+        """
         super().__init__(dataset, num_replicas=num_replicas, rank=rank, shuffle=shuffle)
+        # 从训练数据集中拷贝每个训练数据对应的时频图分片数量
         self.lengths = dataset.lengths
         self.batch_size = batch_size
         self.boundaries = boundaries
@@ -402,17 +414,33 @@ class DistributedBucketSampler(torch.utils.data.distributed.DistributedSampler):
         self.num_samples = self.total_size // self.num_replicas
 
     def _create_buckets(self):
+        """
+            数据分桶，将原本的连续特征转换为多个二元特征
+            在这里，我们将原本可能连续的时频分片长度转换为下列数据范围的中的一个
+            [32, 300, 400, 500, 600, 700, 800, 900, 1000]
+        """
+        # 依据 boundaries 的大小 - 1 来创建 buckets
         buckets = [[] for _ in range(len(self.boundaries) - 1)]
+        # 遍历
         for i in range(len(self.lengths)):
             length = self.lengths[i]
+            # 通过二分法查找当前长度所在的范围
             idx_bucket = self._bisect(length)
             if idx_bucket != -1:
                 buckets[idx_bucket].append(i)
 
+        # 对不存在的某一时频分片范围直接删除
         for i in range(len(buckets) - 1, 0, -1):
             if len(buckets[i]) == 0:
                 buckets.pop(i)
                 self.boundaries.pop(i + 1)
+
+        """
+            此时，buckets 的数据结构如下:
+            [[32, 37, 39, 40, ...], ..., [901, 906]]
+            这些数字是数据集中每条数据记录的序号
+            与 boundaries 范围对应
+        """
 
         num_samples_per_bucket = []
         for i in range(len(buckets)):
@@ -420,6 +448,7 @@ class DistributedBucketSampler(torch.utils.data.distributed.DistributedSampler):
             total_batch_size = self.num_replicas * self.batch_size
             rem = (total_batch_size - (len_bucket % total_batch_size)) % total_batch_size
             num_samples_per_bucket.append(len_bucket + rem)
+        # 返回 buckets 和 每个 bucket 的采样数目
         return buckets, num_samples_per_bucket
 
     def __iter__(self):
@@ -470,7 +499,7 @@ class DistributedBucketSampler(torch.utils.data.distributed.DistributedSampler):
 
         if hi > lo:
             mid = (hi + lo) // 2
-            if self.boundaries[mid] < x and x <= self.boundaries[mid + 1]:
+            if self.boundaries[mid] < x <= self.boundaries[mid + 1]:
                 return mid
             elif x <= self.boundaries[mid]:
                 return self._bisect(x, lo, mid)

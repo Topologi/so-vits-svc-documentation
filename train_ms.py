@@ -1,3 +1,7 @@
+"""
+    训练多人 VITS 模型
+"""
+
 import os
 # import json
 # import argparse
@@ -47,7 +51,8 @@ def main():
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '25565'
 
-    """ 从命令行中读取指令
+    """
+        从命令行中读取指令
         指令结构: [-c 模型结构.json] [-m 模型存放位置]
     """
     hps = utils.get_hparams()
@@ -95,8 +100,7 @@ def run(rank, n_gpus, hps):
     """
     train_dataset = TextAudioSpeakerLoader(hps.data.training_files, hps.data)
 
-    # 分布式训练采样器，用于使得输入训练数据的长度一致
-    # TODO("HERE")
+    # 分布式训练数据集采样器，用于使得输入训练数据的长度一致
     train_sampler = DistributedBucketSampler(
         train_dataset,
         hps.train.batch_size,
@@ -104,37 +108,57 @@ def run(rank, n_gpus, hps):
         num_replicas=n_gpus,
         rank=rank,
         shuffle=True)
+
     collate_fn = TextAudioSpeakerCollate()
     train_loader = DataLoader(train_dataset, num_workers=8, shuffle=False, pin_memory=True,
                               collate_fn=collate_fn, batch_sampler=train_sampler)
+    # 如果是一号进程，则创建测试集
     if rank == 0:
         eval_dataset = TextAudioSpeakerLoader(hps.data.validation_files, hps.data)
         eval_loader = DataLoader(eval_dataset, num_workers=8, shuffle=False,
                                  batch_size=hps.train.batch_size, pin_memory=True,
                                  drop_last=False, collate_fn=collate_fn)
-
+    """
+        初始化生成器模型,GAN
+    """
     net_g = SynthesizerTrn(
         len(symbols),
         hps.data.filter_length // 2 + 1,
         hps.train.segment_size // hps.data.hop_length,
-        #####################################
+        # 多人模型中的新增代码，用于指定训练集中一共有多少个说话人
         n_speakers=hps.data.n_speakers,
-        #####################################
+        # 多人模型中的新增代码
         **hps.model).cuda(rank)
+    """
+        初始化辨别器模型,GAN
+    """
     net_d = MultiPeriodDiscriminator(hps.model.use_spectral_norm).cuda(rank)
+    """
+        为生成器设置优化函数
+    """
     optim_g = torch.optim.AdamW(
         net_g.parameters(),
         hps.train.learning_rate,
         betas=hps.train.betas,
         eps=hps.train.eps)
+    """
+        为鉴别器设置优化函数
+    """
     optim_d = torch.optim.AdamW(
         net_d.parameters(),
         hps.train.learning_rate,
         betas=hps.train.betas,
         eps=hps.train.eps)
+    """
+        使用并行数据
+    """
     net_g = DDP(net_g, device_ids=[rank])
     net_d = DDP(net_d, device_ids=[rank])
 
+    """
+        尝试加载已经存在的模型数据，在此基础上继续训练
+        会加载拥有最大序号的 G 和 D 模型数据
+    """
     try:
         _, _, _, epoch_str = utils.load_checkpoint(utils.latest_checkpoint_path(hps.model_dir, "G_*.pth"), net_g,
                                                    optim_g)
@@ -149,6 +173,9 @@ def run(rank, n_gpus, hps):
 
     scaler = GradScaler(enabled=hps.train.fp16_run)
 
+    """
+        开始训练
+    """
     for epoch in range(epoch_str, hps.train.epochs + 1):
         if rank == 0:
             train_and_evaluate(rank, epoch, hps, [net_g, net_d], [optim_g, optim_d], [scheduler_g, scheduler_d], scaler,
