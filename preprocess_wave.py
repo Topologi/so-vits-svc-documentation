@@ -4,6 +4,7 @@ import pyworld
 import utils
 import numpy as np
 from scipy.io import wavfile
+import argparse
 
 
 class FeatureInput(object):
@@ -35,7 +36,7 @@ class FeatureInput(object):
     def coarse_f0(self, f0):
         f0_mel = 1127 * np.log(1 + f0 / 700)
         f0_mel[f0_mel > 0] = (f0_mel[f0_mel > 0] - self.f0_mel_min) * (
-            self.f0_bin - 2
+                self.f0_bin - 2
         ) / (self.f0_mel_max - self.f0_mel_min) + 1
 
         # use 0 or 1
@@ -52,7 +53,7 @@ class FeatureInput(object):
     def coarse_f0_ts(self, f0):
         f0_mel = 1127 * (1 + f0 / 700).log()
         f0_mel[f0_mel > 0] = (f0_mel[f0_mel > 0] - self.f0_mel_min) * (
-            self.f0_bin - 2
+                self.f0_bin - 2
         ) / (self.f0_mel_max - self.f0_mel_min) + 1
 
         # use 0 or 1
@@ -70,47 +71,67 @@ class FeatureInput(object):
         wavfile.write(path, self.fs, wav.astype(np.int16))
 
 
+def get_hparams():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-s', '--sounds', type=str, default='./datasets/sounds',
+                        help='Input datasets sounds wav folder')
+    parser.add_argument('-f', '--f0', type=str, default='./datasets/f0',
+                        help='Set where to put output f0 data')
+    parser.add_argument('-u', '--units', type=str, default='./datasets/speech_units',
+                        help='Set where to put output HuBERT units')
+    parser.add_argument('-c', '--config', type=str, default="./configs/nyarumul.json",
+                        help='JSON file for configuration')
+    parser.add_argument('-d', '--description', type=str, default="./datasets/nyarumul.txt",
+                        help='TXT file for train data description')
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    wavPath = "./data/waves"
-    outPath = "./data/label"
-    if not os.path.exists("./data/label"):
-        os.mkdir("./data/label")
+    args = get_hparams()
+    wavPath = args.sounds
+    outF0 = args.f0
+    outSpeechUnits = args.units
+    if not os.path.exists(wavPath):
+        os.makedirs(wavPath)
+    if not os.path.exists(outF0):
+        os.makedirs(outF0)
+    if not os.path.exists(outSpeechUnits):
+        os.makedirs(outSpeechUnits)
 
     # define model and load checkpoint
-    hps = utils.get_hparams_from_file("./configs/singing_base.json")
+    hps = utils.get_hparams_from_file(args.config)
     featureInput = FeatureInput(hps.data.sampling_rate, hps.data.hop_length)
-    vits_file = open("./filelists/vc_file.txt", "w", encoding="utf-8")
+    with open(args.description, "w", encoding="utf-8") as vits_train_data_desc:
+        for spks in os.listdir(wavPath):
+            if os.path.isdir(os.path.join(wavPath, spks)):
+                os.makedirs(os.path.join(outF0, spks))
+                for file in os.listdir(os.path.join(wavPath, spks)):
+                    if file.endswith(".wav"):
+                        # 消除文件后缀名
+                        file = file[:-4]
+                        audio_path = os.path.join(wavPath, spks, f'{file}.wav')
+                        feature_pit = featureInput.compute_f0(audio_path)
+                        coarse_pit = featureInput.coarse_f0(feature_pit)
 
-    for spks in os.listdir(wavPath):
-        if os.path.isdir(f"./{wavPath}/{spks}"):
-            os.makedirs(f"./{outPath}/{spks}")
-            for file in os.listdir(f"./{wavPath}/{spks}"):
-                if file.endswith(".wav"):
-                    file = file[:-4]
-                    audio_path = f"./{wavPath}/{spks}/{file}.wav"
-                    featur_pit = featureInput.compute_f0(audio_path)
-                    coarse_pit = featureInput.coarse_f0(featur_pit)
-                    np.save(
-                        f"{outPath}/{spks}/{file}_pitch.npy",
-                        coarse_pit,
-                        allow_pickle=False,
-                    )
-                    np.save(
-                        f"{outPath}/{spks}/{file}_nsff0.npy",
-                        featur_pit,
-                        allow_pickle=False,
-                    )
+                        # TODO: Add HuBERT Generation here
 
-                    path_audio = f"./data/waves/{spks}/{file}.wav"
-                    path_spkid = f"./data/spkid/{spks}.npy"
-                    path_label = (
-                        f"./data/phone/{spks}/{file}.npy"  # phone means ppg & hubert
-                    )
-                    path_pitch = f"./data/label/{spks}/{file}_pitch.npy"
-                    path_nsff0 = f"./data/label/{spks}/{file}_nsff0.npy"
-                    print(
-                        f"{path_audio}|{path_spkid}|{path_label}|{path_pitch}|{path_nsff0}",
-                        file=vits_file,
-                    )
+                        np.save(
+                            os.path.join(outF0, spks, f'{file}_pitch.npy'),
+                            coarse_pit,
+                            allow_pickle=False,
+                        )
 
-    vits_file.close()
+                        np.save(
+                            os.path.join(wavPath, spks, f'{file}_nsff0.npy'),
+                            feature_pit,
+                            allow_pickle=False,
+                        )
+
+                        # HuBERT code
+                        path_label = os.path.join(outF0, spks, f'{file}.npy')
+                        path_pitch = os.path.join(outF0, spks, f'{file}_pitch.npy')
+                        path_nsff0 = os.path.join(wavPath, spks, f'{file}_nsff0.npy')
+                        print(
+                            f"{audio_path}|{spks}|{path_label}|{path_pitch}|{path_nsff0}",
+                            file=vits_train_data_desc,
+                        )
