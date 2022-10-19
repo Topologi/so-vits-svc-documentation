@@ -8,7 +8,7 @@
 ### 1. [SoftVC](https://github.com/bshall/soft-vc)
 SoftVC 是一个能够将语音转换为语音的模型，与本模型的功能基本上一致，但该模型的效果较差，会产生较为严重的电流声，因此无法直接使用。
 
-该模型主要分为三个部分，本项目主要使用 [HuBERT content encoder](https://github.com/bshall/hubert) 编码器来实现语音转语素的功能。
+该模型主要分为三个部分，本项目主要使用 [HuBERT content encoder](https://github.com/bshall/hubert) 编码器来实现语音转语素的功能，说人话就是去除音频中的个人音色、音调等等东西，只保留指导模型做最基础发音的特征向量。
 1. [HuBERT content encoder](https://github.com/bshall/hubert)
 
     ![SoftVC](./assets/img/soft-vc.png)
@@ -19,7 +19,7 @@ SoftVC 是一个能够将语音转换为语音的模型，与本模型的功能�
 
 由于本模型主要使用 SoftVC 中的 `HuBERT content encoder`，模型中的其他部分就不再赘述，请读者前往原项目查看代码和论文。
 ### 2. [VITS](https://github.com/jaywalnut310/vits)
-`VITS: Conditional Variational Autoencoder with Adversarial Learning for End-to-End Text-to-Speech` 是一种端到端（硬 Train 一发文字到语音）的 TTS 模型，透过 VAE、HifiGAN 等技术，它能够通过用户输入的文字生成高质量的音频，值得注意的是，本模型也自带语音转换功能，但是，要实现该功能，需要同时输入转换者双方的大量音频数据集，因此在引用方面相较于本项目可能略差一些。
+`VITS: Conditional Variational Autoencoder with Adversarial Learning for End-to-End Text-to-Speech` 是一种端到端（硬 Train 一发文字到语音）的 TTS 模型，透过 VAE、HifiGAN 等技术，它能够通过用户输入的文字生成高质量的音频，值得注意的是，本模型也自带语音转换功能，但是，要实现该功能，需要同时输入转换者双方的大量音频数据集，因此在应用方面相较于本项目可能略差一些。
 
 | Vits 模型训练                     | Vits 模型推理（生成）                 |
 |-------------------------------|-------------------------------|
