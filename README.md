@@ -29,7 +29,18 @@ SoftVC 是一个能够将语音转换为语音的模型，与本模型的功能�
 ### 3. [Coarse F0](https://github.com/PlayVoice/VI-SVC/blob/main/svc/prepare/preprocess_wave.py)
 基频(`F0`)是一种和音高(`Pitch`)高度相似的概念，你大概可以在本文中直接将其理解为音高，本文采用了 VI-SVC 中的现有实现来直接提取原音频中的音高数据用于引导模型产生的实际音频。
 ## 项目结构
+## SoftVC-VITS 模型工作原理
 TODO(可以先参考源码，源码已经高度注释)
+## 如何训练模型？
+### 训练数据文件结构
+TODO
+### 训练模型指令
+TODO
+### 模型的 checkpoint 与断点重训
+TODO
+## 如何使用模型？
+### 载入模型参数和权值
+TODO
 > PS
 > + midi note（0-127 LongTensor）通过pitch_embedding后与soft-units相加替代vits原本的文本输入
 > + 使用midi而非f0似乎会导致模型音高不准 目前修改回使用F0
