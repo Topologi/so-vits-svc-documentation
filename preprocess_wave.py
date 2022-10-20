@@ -152,6 +152,16 @@ if __name__ == "__main__":
     # define model and load checkpoint
     hps = utils.get_hparams_from_file(args.config)
     featureInput = FeatureInput(hps.data.sampling_rate, hps.data.hop_length)
+    # 开始尝试启动 HuBERT
+    proxy = args.proxy
+    if len(proxy) == 0:
+        proxy_obj = None
+    else:
+        proxy_obj = {
+            'http': proxy,
+            'https': proxy
+        }
+    hubert_net = encode.get_hubert_soft_encoder(proxy_obj)
     with open(args.description, "w", encoding="utf-8") as vits_train_data_desc:
         for speaker_id in os.listdir(wavPath):
             if os.path.isfile(os.path.join(wavPath, speaker_id)):
@@ -164,22 +174,11 @@ if __name__ == "__main__":
                     os.mkdir(os.path.join(outF0, speaker_id))
                 if not os.path.exists(os.path.join(outSpeechUnits, speaker_id)):
                     os.mkdir(os.path.join(outSpeechUnits, speaker_id))
-                # 开始尝试启动 HuBERT
-                proxy = args.proxy
-                if len(proxy) == 0:
-                    proxy_obj = None
-                else:
-                    proxy_obj = {
-                        'http': proxy,
-                        'https': proxy
-                    }
-                hubert_model = encode.get_hubert_soft_encoder(proxy_obj)
                 # 开始执行并行化音频处理
 
                 # 执行 Hubert 处理 #
                 count = 0
                 audios_dataloader = load_hubert_audio(os.path.join(wavPath, speaker_id), outSpeechUnits)
-                hubert_net = hubert.encode.get_hubert_soft_encoder(proxy_obj)
                 datasets = load_hubert_audio(os.path.join(wavPath, speaker_id),
                                              os.path.join(outSpeechUnits, speaker_id))
                 if torch.cuda.is_available():
