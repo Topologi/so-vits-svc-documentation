@@ -1,13 +1,15 @@
-import os
+import os.path
+
+import torch
+
 import hubert.encode
-import torchaudio
-import librosa
+import preprocess_wave
 
 if __name__ == '__main__':
-    audio, sr = torchaudio.load('./samples/sample_out1.wav')
-    audio = librosa.resample(audio, orig_sr=sr, target_sr=16000)
-    audio = audio.unsqueeze(0).cuda()
-    hubert_net = hubert.encode.get_hubert_soft_encoder(proxy={'http': 'http://localhost:7891'})
-    units = hubert_net.units(audio)
-    print(units.shape)
+    hubert_net = hubert.encode.get_hubert_soft_encoder(proxy={'http': 'http://localhost:7891',
+                                                              'https': 'http://localhost:7891'})
+    datasets = preprocess_wave.load_hubert_audio('./samples')
+    hubert_net.cuda()
+    for data, filename, sound_folder in datasets:
+        torch.save(hubert_net.units(data.cuda()), os.path.join(sound_folder, filename))
 

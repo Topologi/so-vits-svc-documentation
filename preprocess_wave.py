@@ -1,6 +1,9 @@
 import os
 import librosa
 import pyworld
+import torch.utils.data
+import torchaudio
+
 import utils
 import numpy as np
 from scipy.io import wavfile
@@ -97,8 +100,30 @@ def get_hparams():
     return parser.parse_args()
 
 
-def load_hubert_audio(origin_sounds_folder) -> map:
-    pass
+class AudioDataset(torch.utils.data.Dataset):
+    def __init__(self, sound_folder):
+        super().__init__()
+        self.sound_folder = sound_folder
+        self.filename = []
+        for filename in os.listdir(sound_folder):
+            if filename.endswith('.wav'):
+                self.filename.append(filename)
+
+    def __len__(self):
+        return len(self.filename)
+
+    def __getitem__(self, index):
+        audio, sr = torchaudio.load(os.path.join(self.sound_folder, self.filename[index]))
+        if sr != 16000:
+            audio = librosa.resample(audio.cpu().numpy(), orig_sr=sr, target_sr=16000)
+        return torch.tensor(audio).unsqueeze(0), self.filename[index], self.sound_folder
+
+
+def load_hubert_audio(origin_sounds_folder):
+    """
+        FIXME: 可以修改实现为 DataLoader，但是要做 Padding，先暂时用单线程搞定
+    """
+    return AudioDataset(origin_sounds_folder)
 
 
 if __name__ == "__main__":
@@ -131,16 +156,16 @@ if __name__ == "__main__":
                 os.makedirs(os.path.join(outSpeechUnits, speaker_id))
                 # 开始尝试启动 HuBERT
                 proxy = args.proxy
-                proxy_obj = {}
-                if proxy.startswith('http://'):
-                    proxy_obj['http'] = proxy
-                elif proxy.startswith('https://'):
-                    proxy_obj['https'] = proxy
-                else:
+                if len(proxy) == 0:
                     proxy_obj = None
+                else:
+                    proxy_obj = {
+                        'http': proxy,
+                        'https': proxy
+                    }
                 hubert_model = encode.get_hubert_soft_encoder(proxy_obj)
                 # 开始执行并行化音频处理
-                audios = load_hubert_audio(os.path.join(wavPath, speaker_id))
+                audios_dataloader = load_hubert_audio(os.path.join(wavPath, speaker_id))
                 # TODO: here
                 for file in os.listdir(os.path.join(wavPath, speaker_id)):
                     if file.endswith(".wav"):
