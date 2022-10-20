@@ -2,3 +2,4 @@
 monotonic_align/monotonic_align
 build
 __pycache__
+/logs

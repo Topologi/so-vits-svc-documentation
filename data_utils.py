@@ -290,9 +290,7 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         该方法进行过改进，加载的并不是 text，实际上加载的是 HuBERT soft content encoder 处理后的多维向量
         在加载完毕后使用 torch 转为浮点向量随后返回
         """
-        soft = np.load(text)
-        text_norm = torch.FloatTensor(soft)
-        return text_norm
+        return torch.load(text)
 
     def get_pitch(self, pitch):
         """

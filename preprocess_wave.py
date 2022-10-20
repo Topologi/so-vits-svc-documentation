@@ -1,17 +1,17 @@
+import argparse
+import logging
 import os
+import re
+
 import librosa
+import numpy as np
 import pyworld
 import torch.utils.data
 import torchaudio
+from scipy.io import wavfile
 
 import utils
-import numpy as np
-from scipy.io import wavfile
-import argparse
-import logging
-import re
 from hubert import encode
-import hubert
 
 
 class FeatureInput(object):
@@ -76,6 +76,17 @@ class FeatureInput(object):
     def save_wav(self, wav, path):
         wav *= 32767 / max(0.01, np.max(np.abs(wav))) * 0.6
         wavfile.write(path, self.fs, wav.astype(np.int16))
+
+
+# Thanks to IceKyrin
+# https://github.com/IceKyrin/sovits_guide
+def resize2d(x, target_len):
+    source = np.array(x)
+    source[source < 0.001] = np.nan
+    target = np.interp(np.arange(0, len(source) * target_len, len(source)) / target_len, np.arange(0, len(source)),
+                       source)
+    res = np.nan_to_num(target)
+    return res
 
 
 def get_logger():
@@ -188,9 +199,9 @@ if __name__ == "__main__":
 
                 for data, filename, sound_folder, hubert_folder in datasets:
                     if torch.cuda.is_available():
-                        torch.save(hubert_net.units(data.cuda()), os.path.join(hubert_folder, f'{filename[:-4]}.npy'))
+                        torch.save(hubert_net.units(data.cuda()).squeeze(), os.path.join(hubert_folder, f'{filename[:-4]}.npy'))
                     else:
-                        torch.save(hubert_net.units(data.cpu()), os.path.join(hubert_folder, f'{filename[:-4]}.npy'))
+                        torch.save(hubert_net.units(data.cpu()).squeeze(), os.path.join(hubert_folder, f'{filename[:-4]}.npy'))
                     count += 1
                     if count % 10 == 0:
                         logger.info(f'Hubert handled total {count} files')
@@ -202,7 +213,10 @@ if __name__ == "__main__":
                         # 消除文件后缀名
                         file = file[:-4]
                         audio_path = os.path.join(wavPath, speaker_id, f'{file}.wav')
+                        soft = torch.load(os.path.join(outSpeechUnits, speaker_id, f'{file}.npy'))
                         feature_pit = featureInput.compute_f0(audio_path)
+                        # 标准化 f0 尺寸，与 HuBERT 输出对应
+                        feature_pit = resize2d(feature_pit, soft.shape[0])
                         coarse_pit = featureInput.coarse_f0(feature_pit)
 
                         np.save(
