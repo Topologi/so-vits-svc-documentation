@@ -1,14 +1,14 @@
-import time
+# import time
 import os
 import random
-import numpy as np
+# import numpy as np
 import torch
 import torch.utils.data
 import numpy as np
-import commons
+# import commons
 from mel_processing import spectrogram_torch
 from utils import load_wav_to_torch, load_filepaths_and_text
-from text import text_to_sequence, cleaned_text_to_sequence
+# from text import text_to_sequence, cleaned_text_to_sequence
 
 
 def dropout1d(myarray, ratio=0.5):
@@ -99,7 +99,7 @@ class TextAudioLoader(torch.utils.data.Dataset):
         return len(self.audiopaths_and_text)
 
 
-class TextAudioCollate():
+class TextAudioCollate:
     """ Zero-pads model inputs and targets
     """
 

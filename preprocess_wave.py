@@ -11,6 +11,7 @@ import argparse
 import logging
 import re
 from hubert import encode
+import hubert
 
 
 class FeatureInput(object):
@@ -48,7 +49,7 @@ class FeatureInput(object):
         # use 0 or 1
         f0_mel[f0_mel <= 1] = 1
         f0_mel[f0_mel > self.f0_bin - 1] = self.f0_bin - 1
-        f0_coarse = np.rint(f0_mel).astype(np.int)
+        f0_coarse = np.rint(f0_mel).astype(int)
         assert f0_coarse.max() <= 255 and f0_coarse.min() >= 1, (
             f0_coarse.max(),
             f0_coarse.min(),
@@ -101,9 +102,10 @@ def get_hparams():
 
 
 class AudioDataset(torch.utils.data.Dataset):
-    def __init__(self, sound_folder):
+    def __init__(self, sound_folder, output_hubert_folder):
         super().__init__()
         self.sound_folder = sound_folder
+        self.output_hubert_folder = output_hubert_folder
         self.filename = []
         for filename in os.listdir(sound_folder):
             if filename.endswith('.wav'):
@@ -116,14 +118,14 @@ class AudioDataset(torch.utils.data.Dataset):
         audio, sr = torchaudio.load(os.path.join(self.sound_folder, self.filename[index]))
         if sr != 16000:
             audio = librosa.resample(audio.cpu().numpy(), orig_sr=sr, target_sr=16000)
-        return torch.tensor(audio).unsqueeze(0), self.filename[index], self.sound_folder
+        return torch.tensor(audio).unsqueeze(0), self.filename[index], self.sound_folder, self.output_hubert_folder
 
 
-def load_hubert_audio(origin_sounds_folder):
+def load_hubert_audio(origin_sounds_folder, output_hubert_folder):
     """
         FIXME: 可以修改实现为 DataLoader，但是要做 Padding，先暂时用单线程搞定
     """
-    return AudioDataset(origin_sounds_folder)
+    return AudioDataset(origin_sounds_folder, output_hubert_folder)
 
 
 if __name__ == "__main__":
@@ -152,8 +154,10 @@ if __name__ == "__main__":
                 logger.warning(f'Caould not handle speaker with id: {speaker_id}, expected number from 1 to 9')
                 continue
             if os.path.isdir(os.path.join(wavPath, speaker_id)):
-                os.makedirs(os.path.join(outF0, speaker_id))
-                os.makedirs(os.path.join(outSpeechUnits, speaker_id))
+                if not os.path.exists(os.path.join(outF0, speaker_id)):
+                    os.mkdir(os.path.join(outF0, speaker_id))
+                if not os.path.exists(os.path.join(outSpeechUnits, speaker_id)):
+                    os.mkdir(os.path.join(outSpeechUnits, speaker_id))
                 # 开始尝试启动 HuBERT
                 proxy = args.proxy
                 if len(proxy) == 0:
@@ -165,8 +169,23 @@ if __name__ == "__main__":
                     }
                 hubert_model = encode.get_hubert_soft_encoder(proxy_obj)
                 # 开始执行并行化音频处理
-                audios_dataloader = load_hubert_audio(os.path.join(wavPath, speaker_id))
-                # TODO: here
+
+                # 执行 Hubert 处理 #
+                audios_dataloader = load_hubert_audio(os.path.join(wavPath, speaker_id), outSpeechUnits)
+                hubert_net = hubert.encode.get_hubert_soft_encoder(proxy_obj)
+                datasets = load_hubert_audio(os.path.join(wavPath, speaker_id),
+                                             os.path.join(outSpeechUnits, speaker_id))
+                if torch.cuda.is_available():
+                    hubert_net.cuda()
+                else:
+                    hubert_net.cpu()
+                for data, filename, sound_folder, hubert_folder in datasets:
+                    if torch.cuda.is_available():
+                        torch.save(hubert_net.units(data.cuda()), os.path.join(hubert_folder, f'{filename}.npy'))
+                    else:
+                        torch.save(hubert_net.units(data.cpu()), os.path.join(hubert_folder, f'{filename}.npy'))
+                # Hubert 处理结束 #
+
                 for file in os.listdir(os.path.join(wavPath, speaker_id)):
                     if file.endswith(".wav"):
                         # 消除文件后缀名
@@ -191,7 +210,13 @@ if __name__ == "__main__":
                         path_label = os.path.join(outSpeechUnits, speaker_id, f'{file}.npy')
                         path_pitch = os.path.join(outF0, speaker_id, f'{file}_pitch.npy')
                         path_nsff0 = os.path.join(wavPath, speaker_id, f'{file}_nsff0.npy')
+                        windows_slash = '\\'
+                        linux_slash = '/'
                         print(
-                            f"{audio_path}|{speaker_id}|{path_label}|{path_pitch}|{path_nsff0}",
+                            f"{audio_path.replace(windows_slash, linux_slash)}|"
+                            f"{speaker_id.replace(windows_slash, linux_slash)}|"
+                            f"{path_label.replace(windows_slash, linux_slash)}|"
+                            f"{path_pitch.replace(windows_slash, linux_slash)}|"
+                            f"{path_nsff0.replace(windows_slash, linux_slash)}",
                             file=vits_train_data_desc,
                         )
