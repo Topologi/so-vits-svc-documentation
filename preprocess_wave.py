@@ -162,6 +162,10 @@ if __name__ == "__main__":
             'https': proxy
         }
     hubert_net = encode.get_hubert_soft_encoder(proxy_obj)
+    if torch.cuda.is_available():
+        hubert_net.cuda()
+    else:
+        hubert_net.cpu()
     with open(args.description, "w", encoding="utf-8") as vits_train_data_desc:
         for speaker_id in os.listdir(wavPath):
             if os.path.isfile(os.path.join(wavPath, speaker_id)):
@@ -181,10 +185,7 @@ if __name__ == "__main__":
                 audios_dataloader = load_hubert_audio(os.path.join(wavPath, speaker_id), outSpeechUnits)
                 datasets = load_hubert_audio(os.path.join(wavPath, speaker_id),
                                              os.path.join(outSpeechUnits, speaker_id))
-                if torch.cuda.is_available():
-                    hubert_net.cuda()
-                else:
-                    hubert_net.cpu()
+
                 for data, filename, sound_folder, hubert_folder in datasets:
                     if torch.cuda.is_available():
                         torch.save(hubert_net.units(data.cuda()), os.path.join(hubert_folder, f'{filename}.npy'))
