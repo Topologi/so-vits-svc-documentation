@@ -252,17 +252,22 @@ def hubert_discrete(
 def hubert_soft(
     pretrained: bool = True,
     progress: bool = True,
+    download: bool = False
 ) -> HubertSoft:
     r"""HuBERT-Soft from `"A Comparison of Discrete and Soft Speech Units for Improved Voice Conversion"`.
     Args:
         pretrained (bool): load pretrained weights into the model
         progress (bool): show progress bar when downloading model
+        download (bool): whether download from Github
     """
     hubert = HubertSoft()
     if pretrained:
-        checkpoint = torch.hub.load_state_dict_from_url(
-            URLS["hubert-soft"], progress=progress
-        )
+        if download:
+            checkpoint = torch.hub.load_state_dict_from_url(
+                URLS["hubert-soft"], progress=progress
+            )
+        else:
+            checkpoint = torch.load('./hubert/model/hubert-soft.pt')
         consume_prefix_in_state_dict_if_present(checkpoint, "module.")
         hubert.load_state_dict(checkpoint)
         hubert.eval()

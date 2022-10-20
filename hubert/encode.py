@@ -60,8 +60,7 @@ def get_hubert_soft_encoder(proxy=None):
     logger = get_logger()
     check_and_download_model(logger, proxy)
     logger.info('Loading HuBERT model...')
-    # TODO: here
-    return hubert_soft(True, True)
+    return hubert_soft(True, True, False)
 
 
 if __name__ == '__main__':
