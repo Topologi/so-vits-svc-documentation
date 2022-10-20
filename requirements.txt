@@ -13,3 +13,4 @@ pyworld
 sacred
 tqdm
 sklearn
+requests
