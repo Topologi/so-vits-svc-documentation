@@ -3,6 +3,8 @@
 """
 
 import os
+import platform
+
 # import json
 # import argparse
 # import itertools
@@ -75,7 +77,10 @@ def run(rank, n_gpus, hps):
         writer_eval = SummaryWriter(log_dir=os.path.join(hps.model_dir, "eval"))
 
     # 启动 torch 分布式，使用 nccl 后端，初始化方法为 env schema，世界大小和 gpu 数量同步，传入 rank
-    dist.init_process_group(backend='nccl', init_method='env://', world_size=n_gpus, rank=rank)
+    if platform.system() == 'Windows':
+        dist.init_process_group(backend='gloo', init_method='env://', world_size=n_gpus, rank=rank)
+    else:
+        dist.init_process_group(backend='nccl', init_method='env://', world_size=n_gpus, rank=rank)
     # 加载手动设置的训练种子
     torch.manual_seed(hps.train.seed)
     # 根据 rank 设置使用的显卡
