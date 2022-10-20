@@ -7,6 +7,7 @@ from scipy.io import wavfile
 import argparse
 import logging
 import re
+from hubert import encode
 
 
 class FeatureInput(object):
@@ -91,10 +92,12 @@ def get_hparams():
                         help='JSON file for configuration')
     parser.add_argument('-d', '--description', type=str, default="./datasets/nyarumul.txt",
                         help='TXT file for train data description')
+    parser.add_argument('-p', '--proxy', type=str, default="",
+                        help="Proxy server for downloading HuBERT model, example: http(s)://localhost:7891")
     return parser.parse_args()
 
 
-def load_hubert():
+def load_hubert_audio(origin_sounds_folder) -> map:
     pass
 
 
@@ -119,39 +122,51 @@ if __name__ == "__main__":
     hps = utils.get_hparams_from_file(args.config)
     featureInput = FeatureInput(hps.data.sampling_rate, hps.data.hop_length)
     with open(args.description, "w", encoding="utf-8") as vits_train_data_desc:
-        for spks in os.listdir(wavPath):
-            if not re.match('[1-9]', spks):
-                logger.warning(f'Caould not handle speaker with id: {spks}, expected number from 1 to 9')
+        for speaker_id in os.listdir(wavPath):
+            if not re.match('[1-9]', speaker_id):
+                logger.warning(f'Caould not handle speaker with id: {speaker_id}, expected number from 1 to 9')
                 continue
-            if os.path.isdir(os.path.join(wavPath, spks)):
-                os.makedirs(os.path.join(outF0, spks))
-                for file in os.listdir(os.path.join(wavPath, spks)):
+            if os.path.isdir(os.path.join(wavPath, speaker_id)):
+                os.makedirs(os.path.join(outF0, speaker_id))
+                os.makedirs(os.path.join(outSpeechUnits, speaker_id))
+                # 开始尝试启动 HuBERT
+                proxy = args.proxy
+                proxy_obj = {}
+                if proxy.startswith('http://'):
+                    proxy_obj['http'] = proxy
+                elif proxy.startswith('https://'):
+                    proxy_obj['https'] = proxy
+                else:
+                    proxy_obj = None
+                hubert_model = encode.get_hubert_soft_encoder(proxy_obj)
+                # 开始执行并行化音频处理
+                audios = load_hubert_audio(os.path.join(wavPath, speaker_id))
+                # TODO: here
+                for file in os.listdir(os.path.join(wavPath, speaker_id)):
                     if file.endswith(".wav"):
                         # 消除文件后缀名
                         file = file[:-4]
-                        audio_path = os.path.join(wavPath, spks, f'{file}.wav')
+                        audio_path = os.path.join(wavPath, speaker_id, f'{file}.wav')
                         feature_pit = featureInput.compute_f0(audio_path)
                         coarse_pit = featureInput.coarse_f0(feature_pit)
 
-                        # TODO: Add HuBERT Generation here
-
                         np.save(
-                            os.path.join(outF0, spks, f'{file}_pitch.npy'),
+                            os.path.join(outF0, speaker_id, f'{file}_pitch.npy'),
                             coarse_pit,
                             allow_pickle=False,
                         )
 
                         np.save(
-                            os.path.join(wavPath, spks, f'{file}_nsff0.npy'),
+                            os.path.join(wavPath, speaker_id, f'{file}_nsff0.npy'),
                             feature_pit,
                             allow_pickle=False,
                         )
 
                         # HuBERT code
-                        path_label = os.path.join(outSpeechUnits, spks, f'{file}.npy')
-                        path_pitch = os.path.join(outF0, spks, f'{file}_pitch.npy')
-                        path_nsff0 = os.path.join(wavPath, spks, f'{file}_nsff0.npy')
+                        path_label = os.path.join(outSpeechUnits, speaker_id, f'{file}.npy')
+                        path_pitch = os.path.join(outF0, speaker_id, f'{file}_pitch.npy')
+                        path_nsff0 = os.path.join(wavPath, speaker_id, f'{file}_nsff0.npy')
                         print(
-                            f"{audio_path}|{spks}|{path_label}|{path_pitch}|{path_nsff0}",
+                            f"{audio_path}|{speaker_id}|{path_label}|{path_pitch}|{path_nsff0}",
                             file=vits_train_data_desc,
                         )
