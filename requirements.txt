@@ -12,3 +12,4 @@ torchaudio
 pyworld
 sacred
 tqdm
+sklearn

@@ -5,6 +5,8 @@ import utils
 import numpy as np
 from scipy.io import wavfile
 import argparse
+import logging
+import re
 
 
 class FeatureInput(object):
@@ -71,6 +73,12 @@ class FeatureInput(object):
         wavfile.write(path, self.fs, wav.astype(np.int16))
 
 
+def get_logger():
+    fo = '%(asctime)s %(message)s'
+    logging.basicConfig(format=fo)
+    return logging.getLogger('SoundPreprocessor')
+
+
 def get_hparams():
     parser = argparse.ArgumentParser()
     parser.add_argument('-s', '--sounds', type=str, default='./datasets/sounds',
@@ -86,11 +94,20 @@ def get_hparams():
     return parser.parse_args()
 
 
+def load_hubert():
+    pass
+
+
 if __name__ == "__main__":
+    logger = get_logger()
+    logger.info('Initializing according to parameters')
     args = get_hparams()
     wavPath = args.sounds
     outF0 = args.f0
     outSpeechUnits = args.units
+    logger.info(f'Input sound path: {wavPath}')
+    logger.info(f'Output F0 path: {outF0}')
+    logger.info(f'Output HuBERT speech units path: {outSpeechUnits}')
     if not os.path.exists(wavPath):
         os.makedirs(wavPath)
     if not os.path.exists(outF0):
@@ -103,6 +120,9 @@ if __name__ == "__main__":
     featureInput = FeatureInput(hps.data.sampling_rate, hps.data.hop_length)
     with open(args.description, "w", encoding="utf-8") as vits_train_data_desc:
         for spks in os.listdir(wavPath):
+            if not re.match('[1-9]', spks):
+                logger.warning(f'Caould not handle speaker with id: {spks}, expected number from 1 to 9')
+                continue
             if os.path.isdir(os.path.join(wavPath, spks)):
                 os.makedirs(os.path.join(outF0, spks))
                 for file in os.listdir(os.path.join(wavPath, spks)):
@@ -128,7 +148,7 @@ if __name__ == "__main__":
                         )
 
                         # HuBERT code
-                        path_label = os.path.join(outF0, spks, f'{file}.npy')
+                        path_label = os.path.join(outSpeechUnits, spks, f'{file}.npy')
                         path_pitch = os.path.join(outF0, spks, f'{file}_pitch.npy')
                         path_nsff0 = os.path.join(wavPath, spks, f'{file}_nsff0.npy')
                         print(
