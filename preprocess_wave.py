@@ -81,7 +81,9 @@ class FeatureInput(object):
 def get_logger():
     fo = '%(asctime)s %(message)s'
     logging.basicConfig(format=fo)
-    return logging.getLogger('SoundPreprocessor')
+    logger_ = logging.getLogger('SoundPreprocessor')
+    logger_.setLevel(logging.INFO)
+    return logger_
 
 
 def get_hparams():
@@ -129,6 +131,8 @@ def load_hubert_audio(origin_sounds_folder, output_hubert_folder):
 
 
 if __name__ == "__main__":
+    numba_logger = logging.getLogger("numba")
+    numba_logger.setLevel(logging.WARNING)
     logger = get_logger()
     logger.info('Initializing according to parameters')
     args = get_hparams()
@@ -150,8 +154,10 @@ if __name__ == "__main__":
     featureInput = FeatureInput(hps.data.sampling_rate, hps.data.hop_length)
     with open(args.description, "w", encoding="utf-8") as vits_train_data_desc:
         for speaker_id in os.listdir(wavPath):
+            if os.path.isfile(os.path.join(wavPath, speaker_id)):
+                continue
             if not re.match('[1-9]', speaker_id):
-                logger.warning(f'Caould not handle speaker with id: {speaker_id}, expected number from 1 to 9')
+                logger.warning(f'Could not handle speaker with id: {speaker_id}, expected number from 1 to 9')
                 continue
             if os.path.isdir(os.path.join(wavPath, speaker_id)):
                 if not os.path.exists(os.path.join(outF0, speaker_id)):
@@ -171,6 +177,7 @@ if __name__ == "__main__":
                 # 开始执行并行化音频处理
 
                 # 执行 Hubert 处理 #
+                count = 0
                 audios_dataloader = load_hubert_audio(os.path.join(wavPath, speaker_id), outSpeechUnits)
                 hubert_net = hubert.encode.get_hubert_soft_encoder(proxy_obj)
                 datasets = load_hubert_audio(os.path.join(wavPath, speaker_id),
@@ -184,6 +191,10 @@ if __name__ == "__main__":
                         torch.save(hubert_net.units(data.cuda()), os.path.join(hubert_folder, f'{filename}.npy'))
                     else:
                         torch.save(hubert_net.units(data.cpu()), os.path.join(hubert_folder, f'{filename}.npy'))
+                    count += 1
+                    if count % 10 == 0:
+                        logger.info(f'Hubert handled total {count} files')
+                del count
                 # Hubert 处理结束 #
 
                 for file in os.listdir(os.path.join(wavPath, speaker_id)):
