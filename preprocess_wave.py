@@ -188,9 +188,9 @@ if __name__ == "__main__":
 
                 for data, filename, sound_folder, hubert_folder in datasets:
                     if torch.cuda.is_available():
-                        torch.save(hubert_net.units(data.cuda()), os.path.join(hubert_folder, f'{filename}.npy'))
+                        torch.save(hubert_net.units(data.cuda()), os.path.join(hubert_folder, f'{filename[:-4]}.npy'))
                     else:
-                        torch.save(hubert_net.units(data.cpu()), os.path.join(hubert_folder, f'{filename}.npy'))
+                        torch.save(hubert_net.units(data.cpu()), os.path.join(hubert_folder, f'{filename[:-4]}.npy'))
                     count += 1
                     if count % 10 == 0:
                         logger.info(f'Hubert handled total {count} files')

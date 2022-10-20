@@ -221,7 +221,7 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         # spec_length = wav_length // hop_length
 
         lengths = []
-        for audiopath, sid, text, pitch in self.audiopaths_sid_text:
+        for audiopath, sid, text, pitch, _ in self.audiopaths_sid_text:
             lengths.append(os.path.getsize(audiopath) // (2 * self.hop_length))
         self.lengths = lengths
 
