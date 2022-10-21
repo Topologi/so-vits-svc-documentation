@@ -5,8 +5,7 @@ import argparse
 import logging
 import json
 import subprocess
-import numpy as np
-from scipy.io.wavfile import read
+import torchaudio
 import torch
 
 MATPLOTLIB_FLAG = False
@@ -24,7 +23,6 @@ def load_checkpoint(checkpoint_path, model, optimizer=None):
         optimizer.load_state_dict(checkpoint_dict['optimizer'])
 
     saved_state_dict = checkpoint_dict['model']
-
 
     if hasattr(model, 'module'):
         state_dict = model.module.state_dict()
@@ -134,8 +132,8 @@ def plot_alignment_to_numpy(alignment, info=None):
 
 
 def load_wav_to_torch(full_path):
-    sampling_rate, data = read(full_path)
-    return torch.FloatTensor(data.astype(np.float32)), sampling_rate
+    data, sr = torchaudio.load(full_path)
+    return data.squeeze(0), sr
 
 
 def load_filepaths_and_text(filename, split="|"):
