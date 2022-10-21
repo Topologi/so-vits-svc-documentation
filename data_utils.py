@@ -70,7 +70,7 @@ class TextAudioLoader(torch.utils.data.Dataset):
         return torch.LongTensor(np.load(pitch))
 
     def get_audio(self, filename):
-        audio, sampling_rate = load_wav_to_torch(filename)
+        audio, sampling_rate = load_wav_to_torch(filename, normalize=False)
         if sampling_rate != self.sampling_rate:
             raise ValueError("{} {} SR doesn't match target {} SR".format(
                 sampling_rate, self.sampling_rate))
@@ -257,7 +257,7 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         将声音波形文件加载为时频图，同时返回转换为二维向量的声音张量
         TODO("可以改写为使用 torchaudio 库直接加载")
         """
-        audio, sampling_rate = load_wav_to_torch(filename)
+        audio, sampling_rate = load_wav_to_torch(filename, False)
         # 训练文件采样率和设置采样率不一样，报错
         if sampling_rate != self.sampling_rate:
             raise ValueError("{} {} SR doesn't match target {} SR".format(

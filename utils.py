@@ -131,8 +131,9 @@ def plot_alignment_to_numpy(alignment, info=None):
     return data
 
 
-def load_wav_to_torch(full_path):
-    data, sr = torchaudio.load(full_path)
+def load_wav_to_torch(full_path, normalize=True):
+    data, sr = torchaudio.load(full_path, normalize=normalize)
+    data = data.float()
     return data.squeeze(0), sr
 
 
