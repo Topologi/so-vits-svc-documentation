@@ -142,7 +142,7 @@ pip install -r requirements.txt
 以安装依赖，在依赖安装完成后，请使用
 
 ```shell
-python preprocess_wave.py
+python preprocess_wave.py -pa true
 ```
 
 以启动相关数据处理单元，这其中包含 f0 生成、hubert
@@ -155,20 +155,21 @@ python preprocess_wave.py
 >
 > 我们给出一个常用的范例启动训练指令
 > ```shell
-> python preprocess_wave.py -p http://localhost:7890
+> python preprocess_wave.py -p http://localhost:7890 -pa true
 > ```
 > 请确定小猫咪是使用了 http 方式来辅助我们的脚本访问网络，通常情况下，小猫咪提供的是 Socks + HTTP 混合端口，这种端口不确定是否能够为
 > Requests 包提供连接，如果出现问题，请手动声明 http 端口来为脚本提供代理
 
-| 参数  | 参数功能                  | 范例                       | 默认值   |
-|-----|-----------------------|--------------------------|-------|
-| -s  | 指定输入音频目录              | ./datasets/sounds        | 同范例   |
-| -f  | 指定 F0 输出目录            | ./datasets/f0            | 同范例   |
-| -u  | 指定 HuBERT 输出目录        | ./datasets/speech_units  | 同范例   |
-| -c  | 指定模型配置文件位置            | ./configs/nyarumul.json  | 同范例   |
-| -d  | 指定数据描述文件存储位置          | ./datasets/nyarumul.txt  | 同范例   |
-| -p  | 指定是否使用代理来下载 HuBERT 模型 | http(s)://localhost:7891 | 空白字符串 |
-| -t  | 指定验证集存放位置             | ./datasets/valid         | 同范例   |
+| 参数   | 参数功能                          | 范例                       | 默认值   |
+|------|-------------------------------|--------------------------|-------|
+| -s   | 指定输入音频目录                      | ./datasets/sounds        | 同范例   |
+| -f   | 指定 F0 输出目录                    | ./datasets/f0            | 同范例   |
+| -u   | 指定 HuBERT 输出目录                | ./datasets/speech_units  | 同范例   |
+| -c   | 指定模型配置文件位置                    | ./configs/nyarumul.json  | 同范例   |
+| -d   | 指定数据描述文件存储位置                  | ./datasets/nyarumul.txt  | 同范例   |
+| -p   | 指定是否使用代理来下载 HuBERT 模型         | http(s)://localhost:7891 | 空白字符串 |
+| -t   | 指定验证集存放位置                     | ./datasets/valid         | 同范例   |
+| - pa | 是否自动分离测试集（如果是第一次使用通常可以打开这个选项） | true                     | false |
 
 在执行完上述指令后，你应该能够发现 `datasets` 文件夹中 `f0`, `sounds` 和 `speech_units`多了很多的数据文件，并且 `datasets`
 目录下出现了 txt 描述文件，恭喜您，这时数据已经准备就绪，我们可以进行模型的训练了！
