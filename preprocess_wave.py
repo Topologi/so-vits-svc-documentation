@@ -42,7 +42,7 @@ def get_hparams():
                         help='Set where to put output HuBERT units')
     parser.add_argument('-c', '--config', type=str, default="./configs/nyarumul.json",
                         help='JSON file for configuration')
-    parser.add_argument('-d', '--description', type=str, default="./datasets/nyarumul.txt",
+    parser.add_argument('-d', '--description', type=str, default="nyarumul.txt",
                         help='TXT file for train data description')
     parser.add_argument('-p', '--proxy', type=str, default="",
                         help="Proxy server for downloading HuBERT model, example: http(s)://localhost:7891")
@@ -91,7 +91,7 @@ def process_wav(wav_path, out_f0, out_speech_units, hubert_net):
     hps = utils.get_hparams_from_file(args.config)
     # TODO: 增加针对 44100 Hz 的处理
     feature_input = FeatureInput(hps.data.sampling_rate, hps.data.hop_length)
-    with open(args.description, "w", encoding="utf-8") as vits_train_data_desc:
+    with open(os.path.join(wav_path, '../', args.description), "w+", encoding="utf-8") as vits_train_data_desc:
         for speaker_id in os.listdir(wav_path):
             if os.path.isfile(os.path.join(wav_path, speaker_id)):
                 continue
@@ -204,16 +204,16 @@ if __name__ == "__main__":
                     filenames.remove(item)
             rand_sel_files_index = torch.randperm(len(filenames))
             rand_sel_files_index = rand_sel_files_index[:int(len(filenames) / 10)]
-            if not os.path.exists(os.path.join(validPath, f'./sounds{spk_id}')):
-                os.makedirs(os.path.join(validPath, f'./sounds/{spk_id}'))
+            if not os.path.exists(os.path.join(validPath, f'sounds/{spk_id}')):
+                os.makedirs(os.path.join(validPath, f'sounds/{spk_id}'))
             for i in rand_sel_files_index:
                 ind = i.item()
                 filename = filenames[ind]
-                os.replace(os.path.join(wavPath, f'./{spk_id}/{filename}'),
-                           os.path.join(validPath, f'./sounds/{spk_id}/{filename}'))
+                os.replace(os.path.join(wavPath, f'{spk_id}/{filename}'),
+                           os.path.join(validPath, f'sounds/{spk_id}/{filename}'))
     process_wav(wavPath, outF0, outSpeechUnits, hubert_net)
-    process_wav(os.path.join(validPath, './sounds'),
-                os.path.join(validPath, './f0'),
-                os.path.join(validPath, './speech_units'),
+    process_wav(os.path.join(validPath, 'sounds'),
+                os.path.join(validPath, 'f0'),
+                os.path.join(validPath, 'speech_units'),
                 hubert_net)
 

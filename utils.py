@@ -149,9 +149,9 @@ def load_filepaths_and_text(filename, split="|"):
 # [-c 模型结构.json] [-m 模型存放位置]
 def get_hparams(init=True):
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--config', type=str, default="./configs/base.json",
+    parser.add_argument('-c', '--config', type=str, default="./configs/nyarumul.json",
                         help='JSON file for configuration')
-    parser.add_argument('-m', '--model', type=str, required=True,
+    parser.add_argument('-m', '--model', type=str, default='Nyarumul',
                         help='Model name')
 
     args = parser.parse_args()

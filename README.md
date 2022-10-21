@@ -142,9 +142,15 @@ python preprocess_wave.py
 在执行完上述指令后，你应该能够发现 `datasets` 文件夹中 `f0`, `sounds` 和 `speech_units` 多了很多的数据文件，并且 `datasets` 目录下出现了 txt 描述文件，恭喜您，这时数据已经准备就绪，我们可以进行模型的训练了！
 
 ### 训练模型指令
-TODO
+在完成上一步的数据集生成后，可以通过指令开始模型的训练，模型训练的指令如下:
+```shell
+python train_ms.py -c ./configs/nyarumul.json -m Nyarumul
+```
+其中 -c ./configs/nyarumul.json 可以更改为自定义的配置文件路径，-m Nyarumul 则是训练的目标模型的名称。
+
+训练中的模型将会被存放在 ./logs/模型名称 的文件夹当中，请妥善保管该文件夹。 `数据无价，谨慎操作`
 ### 模型的 checkpoint 与断点重训
-TODO
+模型具有 checkpoint 功能，这也就意味着你可以在训练一段时间后停止，只需在模型文件夹（`./logs/模型名称`) 中具有 `G_*.pth` 、 `D_*.pth` 和 `config.json` 就可以在之前的基础上继续训练，值得注意的是，模型将会采用具有最大数字的 `pth` 文件作为训练起始，举个例子 `G_100.pth` 和 `G_99.pth`，模型将会采用 `G_100.pth` 作为训练起点继续在此基础上迭代并产出 `G_101.pth` 等等新的权重和模型状态数据。
 ## 如何使用模型？
 ### 载入模型参数和权值
 TODO
