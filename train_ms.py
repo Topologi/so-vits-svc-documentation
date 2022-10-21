@@ -1,16 +1,11 @@
 """
     训练多人 VITS 模型
 """
-
+import logging
 import os
 import platform
 
-# import json
-# import argparse
-# import itertools
-# import math
 import torch
-# from torch import nn, optim
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -44,6 +39,9 @@ global_step = 0
 
 
 def main():
+    matplotlib_logger = logging.getLogger("matplotlib")
+    if matplotlib_logger is not None:
+        matplotlib_logger.setLevel(logging.WARNING)
     """假设单节点多GPU训练"""
     assert torch.cuda.is_available(), "CPU training is not allowed."
 

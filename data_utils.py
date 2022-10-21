@@ -296,7 +296,7 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         """
         从磁盘中加载F0基频(音调)文件
         """
-        return torch.LongTensor(np.load(pitch))
+        return torch.load(pitch)
 
     def get_sid(self, sid):
         sid = torch.LongTensor([int(sid)])

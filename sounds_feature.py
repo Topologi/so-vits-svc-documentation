@@ -6,7 +6,7 @@ from scipy.io import wavfile
 
 class FeatureInput(object):
     def __init__(self, samplerate=16000, hop_size=160):
-        self.fs = samplerate
+        self.sr = samplerate
         self.hop = hop_size
 
         self.f0_bin = 256
@@ -16,15 +16,15 @@ class FeatureInput(object):
         self.f0_mel_max = 1127 * np.log(1 + self.f0_max / 700)
 
     def compute_f0(self, path):
-        x, sr = librosa.load(path, sr=self.fs)
-        assert sr == self.fs
+        x, sr = librosa.load(path, sr=self.sr)
+        assert sr == self.sr
         f0, t = pyworld.dio(
             x.astype(np.double),
             fs=sr,
             f0_ceil=800,
             frame_period=1000 * self.hop / sr,
         )
-        f0 = pyworld.stonemask(x.astype(np.double), f0, t, self.fs)
+        f0 = pyworld.stonemask(x.astype(np.double), f0, t, self.sr)
         for index, pitch in enumerate(f0):
             f0[index] = round(pitch, 1)
         return f0
@@ -65,5 +65,5 @@ class FeatureInput(object):
 
     def save_wav(self, wav, path):
         wav *= 32767 / max(0.01, np.max(np.abs(wav))) * 0.6
-        wavfile.write(path, self.fs, wav.astype(np.int16))
+        wavfile.write(path, self.sr, wav.astype(np.int16))
 

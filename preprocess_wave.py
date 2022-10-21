@@ -52,33 +52,31 @@ def get_hparams():
     return parser.parse_args()
 
 
-class AudioDataset(torch.utils.data.Dataset):
+class HuBERTAudioDataset(torch.utils.data.Dataset):
     def __init__(self, sound_folder, output_hubert_folder):
         super().__init__()
         self.sound_folder = sound_folder
         self.output_hubert_folder = output_hubert_folder
-        self.filename = []
+        self.filenames = []
         for filename in os.listdir(sound_folder):
             if filename.endswith('.wav'):
-                self.filename.append(filename)
+                self.filenames.append(filename)
 
     def __len__(self):
-        return len(self.filename)
+        return len(self.filenames)
 
     def __getitem__(self, index):
-        audio, sr = torchaudio.load(os.path.join(self.sound_folder, self.filename[index]), normalize=False)
-        audio = audio.float()
+        """
+            传入要获取的文件序号
+            返回加载完毕的正则化音频，文件名，源文件目录，HuBERT 输出文件夹
+        """
+        # 注意，HuBERT 的输入一般是经过正则化后的音频数据，要启用正则化
+        audio, sr = torchaudio.load(os.path.join(self.sound_folder, self.filenames[index]), normalize=True)
+        # 如果采样率不是 16000 则进行转码
         if sr != 16000:
             audio = librosa.resample(audio.squeeze(0).cpu().numpy(), orig_sr=sr, target_sr=16000)
             audio = torch.tensor(audio).unsqueeze(0)
-        return audio.unsqueeze(0), self.filename[index], self.sound_folder, self.output_hubert_folder
-
-
-def load_hubert_audio(origin_sounds_folder, output_hubert_folder):
-    """
-        FIXME: 可以修改实现为 DataLoader，但是要做 Padding，先暂时用单线程搞定
-    """
-    return AudioDataset(origin_sounds_folder, output_hubert_folder)
+        return audio.unsqueeze(0), self.filenames[index], self.sound_folder, self.output_hubert_folder
 
 
 def process_wav(wav_path, out_f0, out_speech_units, hubert_net):
@@ -105,20 +103,19 @@ def process_wav(wav_path, out_f0, out_speech_units, hubert_net):
                     os.mkdir(os.path.join(out_f0, speaker_id))
                 if not os.path.exists(os.path.join(out_speech_units, speaker_id)):
                     os.mkdir(os.path.join(out_speech_units, speaker_id))
-                # 开始执行并行化音频处理
 
                 # 执行 Hubert 处理 #
                 count = 0
-                datasets = load_hubert_audio(os.path.join(wav_path, speaker_id),
-                                             os.path.join(out_speech_units, speaker_id))
+                datasets = HuBERTAudioDataset(os.path.join(wav_path, speaker_id),
+                                              os.path.join(out_speech_units, speaker_id))
 
                 for data, filename, sound_folder, hubert_folder in datasets:
                     if torch.cuda.is_available():
                         torch.save(hubert_net.units(data.cuda()).squeeze(),
-                                   os.path.join(hubert_folder, f'{filename[:-4]}.npy'))
+                                   os.path.join(hubert_folder, f'{filename[:-4]}.pt'))
                     else:
                         torch.save(hubert_net.units(data.cpu()).squeeze(),
-                                   os.path.join(hubert_folder, f'{filename[:-4]}.npy'))
+                                   os.path.join(hubert_folder, f'{filename[:-4]}.pt'))
                     count += 1
                     if count % 10 == 0:
                         logger.info(f'Hubert handled total {count} files')
@@ -130,28 +127,26 @@ def process_wav(wav_path, out_f0, out_speech_units, hubert_net):
                         # 消除文件后缀名
                         file = file[:-4]
                         audio_path = os.path.join(wav_path, speaker_id, f'{file}.wav')
-                        soft = torch.load(os.path.join(out_speech_units, speaker_id, f'{file}.npy'))
+                        soft = torch.load(os.path.join(out_speech_units, speaker_id, f'{file}.pt'))
                         feature_pit = feature_input.compute_f0(audio_path)
                         # 标准化 f0 尺寸，与 HuBERT 输出对应
                         feature_pit = resize2d(feature_pit, soft.shape[0])
                         coarse_pit = feature_input.coarse_f0(feature_pit)
 
-                        np.save(
-                            os.path.join(out_f0, speaker_id, f'{file}_pitch.npy'),
-                            coarse_pit,
-                            allow_pickle=False,
+                        torch.save(
+                            torch.LongTensor(coarse_pit),
+                            os.path.join(out_f0, speaker_id, f'{file}_pitch.pt')
                         )
 
-                        np.save(
-                            os.path.join(wav_path, speaker_id, f'{file}_nsff0.npy'),
-                            feature_pit,
-                            allow_pickle=False,
+                        torch.save(
+                            torch.tensor(feature_pit),
+                            os.path.join(wav_path, speaker_id, f'{file}_nsff0.pt')
                         )
 
                         # HuBERT code
-                        path_label = os.path.join(out_speech_units, speaker_id, f'{file}.npy')
-                        path_pitch = os.path.join(out_f0, speaker_id, f'{file}_pitch.npy')
-                        path_nsff0 = os.path.join(wav_path, speaker_id, f'{file}_nsff0.npy')
+                        path_label = os.path.join(out_speech_units, speaker_id, f'{file}.pt')
+                        path_pitch = os.path.join(out_f0, speaker_id, f'{file}_pitch.pt')
+                        path_nsff0 = os.path.join(wav_path, speaker_id, f'{file}_nsff0.pt')
                         windows_slash = '\\'
                         linux_slash = '/'
                         print(
@@ -217,4 +212,3 @@ if __name__ == "__main__":
                 os.path.join(validPath, 'f0'),
                 os.path.join(validPath, 'speech_units'),
                 hubert_net)
-
