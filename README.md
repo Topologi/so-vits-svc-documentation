@@ -39,30 +39,42 @@ datasets 文件夹下包含各中数据集，其中
 `speech_units` 文件夹包含经过 Hubert 加码器加码的文件
 根目录下在数据生成后会产生一个 txt 文件用于描述所有的数据
 
-> IMPORTANT!
+> IMPORTANT
 > 
 > 通常，f0, sounds, speech_units 文件夹都以这个结构来组织数据
-> ```markdown
+> 
 > - f0
 >   - 1
 >   - 2
 >   - 3
 >   - ...
->   - 9
+>   - 8
 > - sounds
 >   - 1
 >   - 2
 >   - 3
 >   - ...
->   - 9
+>   - 8
 > - speech_units
 >   - 1
 >   - 2
 >   - 3
 >   - ...
->   - 9
-> nyarumul.txt
-> ```
+>   - 8
+> - valid
+>   - f0
+>     - 1
+>     - 2
+>     - 3
+>     - ...
+>     - 8
+>   - sounds
+>     - ...
+>   - speech_units
+>     - ...
+>   - nyarumul.txt
+> - nyarumul.txt
+> 
 > 这当中，1、2、3 等文件架代表的是某一位歌手的 ID，例如，1的文件夹下应当放置歌手1的声音文件
 
 要进行预处理，首先需要在 datasets/sounds 文件夹下建立子文件夹，举个例子，我如果有两位歌手，则需要新建如下文件夹并放入数据:
@@ -87,14 +99,14 @@ datasets 文件夹下包含各中数据集，其中
 >     - c4d.wav
 >     - minecraft.wav
 
-目前，数据预处理器只支持最多 `9` 位歌手的数据同时存在，当前版本也没有支持单人数据训练，这主要是因为通常情况下，单人模型的效果并不好，我们总是推荐使用 2 人以上的音频数据用于训练。
+目前，数据预处理器只支持最多 `8` 位歌手的数据同时存在，当前版本也没有支持单人数据训练，这主要是因为通常情况下，单人模型的效果并不好，我们总是推荐使用 2 人以上的音频数据用于训练。
 
 在完成上述的操作后就可以调用 preprocess_wave.py 文件进行数据处理了
 
 > IMPORTANT
 > 
 > 我们总是推荐你先使用 virtualenv 建立子 Python 环境后再安装相关依赖，如果可能的话，请新建 virtualenv 后再执行下列操作
-> 
+
 
 要开始处理？请首先使用指令
 ```shell
@@ -117,14 +129,15 @@ python preprocess_wave.py
 > ```
 > 请确定小猫咪是使用了 http 方式来辅助我们的脚本访问网络，通常情况下，小猫咪提供的是 Socks + HTTP 混合端口，这种端口不确定是否能够为 Requests 包提供连接，如果出现问题，请手动声明 http 端口来为脚本提供代理
 
-| 参数  | 参数功能                  | 范例                       |
-|-----|-----------------------|--------------------------|
-| -s  | 指定输入音频目录              | ./datasets/sounds        |
-| -f  | 指定 F0 输出目录            | ./datasets/f0            |
-| -u  | 指定 HuBERT 输出目录        | ./datasets/speech_units  |
-| -c  | 指定模型配置文件位置            | ./configs/nyarumul.json  |
-| -d  | 指定数据描述文件存储位置          | ./datasets/nyarumul.txt  |
-| -p  | 指定是否使用代理来下载 HuBERT 模型 | http(s)://localhost:7891 |
+| 参数  | 参数功能                  | 范例                       | 默认值   |
+|-----|-----------------------|--------------------------|-------|
+| -s  | 指定输入音频目录              | ./datasets/sounds        | 同范例   |
+| -f  | 指定 F0 输出目录            | ./datasets/f0            | 同范例   |
+| -u  | 指定 HuBERT 输出目录        | ./datasets/speech_units  | 同范例   |
+| -c  | 指定模型配置文件位置            | ./configs/nyarumul.json  | 同范例   |
+| -d  | 指定数据描述文件存储位置          | ./datasets/nyarumul.txt  | 同范例   |
+| -p  | 指定是否使用代理来下载 HuBERT 模型 | http(s)://localhost:7891 | 空白字符串 |
+| -t  | 指定验证集存放位置             | ./datasets/valid         | 同范例   |
 
 在执行完上述指令后，你应该能够发现 `datasets` 文件夹中 `f0`, `sounds` 和 `speech_units` 多了很多的数据文件，并且 `datasets` 目录下出现了 txt 描述文件，恭喜您，这时数据已经准备就绪，我们可以进行模型的训练了！
 

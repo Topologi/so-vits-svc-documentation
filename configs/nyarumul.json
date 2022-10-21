@@ -18,7 +18,7 @@
   },
   "data": {
     "training_files":"./datasets/nyarumul.txt",
-    "validation_files":"./datasets/nyarumul.txt",
+    "validation_files":"./datasets/valid/nyarumul.txt",
     "text_cleaners":["english_cleaners2"],
     "max_wav_value": 32768.0,
     "sampling_rate": 22050,
