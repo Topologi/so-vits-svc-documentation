@@ -4,11 +4,10 @@
 
 歌声音色转换模型，通过 `HuBERT soft content encoder` 内容编码器提取源音频语音特征，随后根据原始音频生成 `Coarse F0`
 信号并将两者结合输入 VITS 以替换原本的文本输入达到歌声转换的效果。
->
-该midi方案目前暂时搁置转入dev分支，目前模型修改回使用 [coarse F0输入](https://github.com/PlayVoice/VI-SVC/blob/main/svc/prepare/preprocess_wave.py)
+> 该midi方案目前暂时搁置转入dev分支，目前模型修改回使用 [coarse F0输入](https://github.com/PlayVoice/VI-SVC/blob/main/svc/prepare/preprocess_wave.py)
 ，目前尝试使用[HarmoF0](https://github.com/wx-wei/harmof0) 来进行f0提取
 
-模型推理、训练、一键脚本汇总整理仓库 [sovits_guide](https://github.com/IceKyrin/sovits_guide)
+**模型推理、训练、一键脚本汇总整理仓库 [sovits_guide](https://github.com/IceKyrin/sovits_guide)**
 
 ## 前置知识
 
@@ -66,98 +65,63 @@ datasets 文件夹下包含各中数据集，其中
 > IMPORTANT
 >
 > 通常，f0, sounds, speech_units 文件夹都以这个结构来组织数据
->
-> - f0
-    >
-
-- 1
-
-> - 2
->   - 3
->   - ...
->   - 8
-> - sounds
-    >
-
-- 1
-
-> - 2
->   - 3
->   - ...
->   - 8
-> - speech_units
-    >
-
-- 1
-
-> - 2
->   - 3
->   - ...
->   - 8
-> - valid
-    >
 
 - f0
-  >
-- 1
+  - 1
+  - 2
+  - 3
+  - ...
+  - 8
+- sounds
+  - 1
+  - 2
+  - 3 
+  - ...
+  - 8
+- speech_units
+  - 1
+  - 2
+  - 3
+  - ...
+  - 8
+- valid
+  - f0
+    - 1
+    - 2
+    - 3
+    - ...
+    - 8
+  - sounds 
+    - ...
 
->     - 2
->     - 3
->     - ...
->     - 8
->   - sounds
-      >
-
-- ...
-
-> - speech_units
-    >
-
-- ...
-
-> - nyarumul.txt
-> - nyarumul.txt
+  - speech_units
+    - ...
+  - nyarumul.txt
+- nyarumul.txt
 >
 > 这当中，1、2、3 等文件架代表的是某一位歌手的 ID，例如，1的文件夹下应当放置歌手1的声音文件
 
 要进行预处理，首先需要在 datasets/sounds 文件夹下建立子文件夹，举个例子，我如果有两位歌手，则需要新建如下文件夹并放入数据:
-> - sounds
-    >
-
-- 1
-  >
-- name1.wav
-
->     - name2.wav
->   - 2
-      >
-
-- 114514.wav
-
->     - jumpstar.wav
+- sounds
+  - 1
+    - name1.wav
+    - name2.wav
+  - 2
+    - 114514.wav
+    - jumpstar.wav
 
 同理可得，如果我有三位歌手的数据，那么我需要新建如下文件夹并放入数据
-> - sounds
-    >
-
-- 1
-  >
-- aaa.wav
-
->     - bbb.wav
->   - 2
-      >
-
-- wwwa.wav
-
->     - ccad.wav
->   - 3
-      >
-
-- blender.wav
-
->     - c4d.wav
->     - minecraft.wav
+- sounds
+  - 1
+    - aaa.wav
+    - bbb.wav
+  - 2
+    - wwwa.wav
+    - ccad.wav
+  - 3
+    - blender.wav
+    - c4d.wav
+    - minecraft.wav
 
 目前，数据预处理器只支持最多 `8` 位歌手的数据同时存在，当前版本也没有支持单人数据训练，这主要是因为通常情况下，单人模型的效果并不好，我们总是推荐使用
 2 人以上的音频数据用于训练。
@@ -325,10 +289,11 @@ nyarumul.json 文件结构如下，需要关注的主要是 `training_files` 和
 作为训练起点继续在此基础上迭代并产出 `G_101.pth` 等等新的权重和模型状态数据。
 
 ## 如何使用模型？
-
-### 载入模型参数和权值
-
+### 载入模型参数和权值以进行输出
 TODO
+### 如何使用 VST 插件来和 Studio One 等机架通信以达到实时效果
+TODO
+
 > PS
 > + midi note（0-127 LongTensor）通过pitch_embedding后与soft-units相加替代vits原本的文本输入
 > + 使用midi而非f0似乎会导致模型音高不准 目前修改回使用F0
