@@ -66,10 +66,12 @@ class AudioDataset(torch.utils.data.Dataset):
         return len(self.filename)
 
     def __getitem__(self, index):
-        audio, sr = torchaudio.load(os.path.join(self.sound_folder, self.filename[index]))
+        audio, sr = torchaudio.load(os.path.join(self.sound_folder, self.filename[index]), normalize=False)
+        audio = audio.float()
         if sr != 16000:
-            audio = librosa.resample(audio.cpu().numpy(), orig_sr=sr, target_sr=16000)
-        return torch.tensor(audio).unsqueeze(0), self.filename[index], self.sound_folder, self.output_hubert_folder
+            audio = librosa.resample(audio.squeeze(0).cpu().numpy(), orig_sr=sr, target_sr=16000)
+            audio = torch.tensor(audio).unsqueeze(0)
+        return audio.unsqueeze(0), self.filename[index], self.sound_folder, self.output_hubert_folder
 
 
 def load_hubert_audio(origin_sounds_folder, output_hubert_folder):
@@ -107,7 +109,6 @@ def process_wav(wav_path, out_f0, out_speech_units, hubert_net):
 
                 # 执行 Hubert 处理 #
                 count = 0
-                audios_dataloader = load_hubert_audio(os.path.join(wav_path, speaker_id), out_speech_units)
                 datasets = load_hubert_audio(os.path.join(wav_path, speaker_id),
                                              os.path.join(out_speech_units, speaker_id))
 
