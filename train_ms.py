@@ -56,14 +56,18 @@ def main():
         指令结构: [-c 模型结构.json] [-m 模型存放位置]
     """
     hps = utils.get_hparams()
-    """以 Pytorch 多线程姿态出击"""
+    """
+    以 Pytorch 多线程姿态出击，
+    启动的线程数量与系统中的显卡数量一致，这也就意味着可能的话，可以使用多张显卡 Train 以成倍地加快训练过程
+    一般情况下只会启动一个主线程来负责模型训练以及其他杂活
+    """
     mp.spawn(run, nprocs=n_gpus, args=(n_gpus, hps,))
 
 
 def run(rank, n_gpus, hps):
     # 声明全局步数
     global global_step
-    # 第一个子线程，将线程设置为 Log 线程
+    # 如果当前线程为主线程，在该线程上初始化 Log，同时产生日志对象
     if rank == 0:
         logger = utils.get_logger(hps.model_dir)
         logger.info(hps)
@@ -76,9 +80,17 @@ def run(rank, n_gpus, hps):
 
     # 启动 torch 分布式，使用 nccl 后端，初始化方法为 env schema，世界大小和 gpu 数量同步，传入 rank
     if platform.system() == 'Windows':
+        logger.info('Running on windows, launching gloo as distribute system backend')
         dist.init_process_group(backend='gloo', init_method='env://', world_size=n_gpus, rank=rank)
-    else:
+    elif platform.system() == 'Linux':
+        logger.info('Running on Linux, launching gloo as distribute system backend')
         dist.init_process_group(backend='nccl', init_method='env://', world_size=n_gpus, rank=rank)
+    elif platform.system() == 'Darwin':
+        logger.error('MacOS is not supported yet')
+        return
+    else:
+        logger.info(f'Unsupported operating system: {platform.system()}')
+        return
     # 加载手动设置的训练种子
     torch.manual_seed(hps.train.seed)
     # 根据 rank 设置使用的显卡
@@ -88,15 +100,15 @@ def run(rank, n_gpus, hps):
         在这里加载训练数据集
         使用配置文件中声明的 training_files 的 txt 引导文件加载数据，同时传入一些从json中读取的配置项目
         
-        text_cleaners: 
+        text_cleaners:  SoVits 不适用
         max_wav_value: 最大波值
         sampling_rate: 训练音频采样率
         filter_length: 
         hop_length: 
-        win_length: 
-        sampling_rate: 
+        win_length: 滑动窗口大小
+        sampling_rate: 数据集中音频采样率 
         
-        cleaned_text: 
+        cleaned_text: SoVits 不适用
         add_blank:
         min_text_len: 最小文本长度 ( Sovits 中不是文本 )
         max_text_len: 最大文本长度 ( Sovits 中不是文本 )
@@ -115,7 +127,7 @@ def run(rank, n_gpus, hps):
     collate_fn = TextAudioSpeakerCollate()
     train_loader = DataLoader(train_dataset, num_workers=8, shuffle=False, pin_memory=True,
                               collate_fn=collate_fn, batch_sampler=train_sampler)
-    # 如果是一号进程，则创建测试集
+    # 如果是主进程进程，则创建测试集
     if rank == 0:
         eval_dataset = TextAudioSpeakerLoader(hps.data.validation_files, hps.data)
         eval_loader = DataLoader(eval_dataset, num_workers=8, shuffle=False,
