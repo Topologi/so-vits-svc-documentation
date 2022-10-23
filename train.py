@@ -1,17 +1,5 @@
-"""
-    训练单人 VITS 模型
-"""
-
 import os
-import json
-import argparse
-import itertools
-import math
-import platform
-
 import torch
-from torch import nn, optim
-import librosa
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -20,6 +8,8 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.cuda.amp import autocast, GradScaler
 
+import platform
+import logging
 import commons
 import utils
 from data_utils import (
@@ -38,15 +28,13 @@ from losses import (
     kl_loss
 )
 from mel_processing import mel_spectrogram_torch, spec_to_mel_torch
-from text.symbols import symbols
-import logging
 
-logging.getLogger('numba').setLevel(logging.WARNING)
 torch.backends.cudnn.benchmark = True
 global_step = 0
 
 
 def main():
+    logging.getLogger('numba').setLevel(logging.WARNING)
     """Assume Single Node Multi GPUs Training Only"""
     assert torch.cuda.is_available(), "CPU training is not allowed."
 
@@ -67,10 +55,19 @@ def run(rank, n_gpus, hps):
         writer = SummaryWriter(log_dir=hps.model_dir)
         writer_eval = SummaryWriter(log_dir=os.path.join(hps.model_dir, "eval"))
 
+    # 启动 torch 分布式，使用 nccl 后端，初始化方法为 env schema，世界大小和 gpu 数量同步，传入 rank
     if platform.system() == 'Windows':
+        logger.info('Running on windows, launching gloo as distribute system backend')
         dist.init_process_group(backend='gloo', init_method='env://', world_size=n_gpus, rank=rank)
-    else:
+    elif platform.system() == 'Linux':
+        logger.info('Running on Linux, launching gloo as distribute system backend')
         dist.init_process_group(backend='nccl', init_method='env://', world_size=n_gpus, rank=rank)
+    elif platform.system() == 'Darwin':
+        logger.error('MacOS is not supported yet')
+        return
+    else:
+        logger.info(f'Unsupported operating system: {platform.system()}')
+        return
     torch.manual_seed(hps.train.seed)
     torch.cuda.set_device(rank)
 
@@ -92,7 +89,7 @@ def run(rank, n_gpus, hps):
                                  drop_last=False, collate_fn=collate_fn)
 
     net_g = SynthesizerTrn(
-        len(symbols),
+        178,
         hps.data.filter_length // 2 + 1,
         hps.train.segment_size // hps.data.hop_length,
         **hps.model).cuda(rank)

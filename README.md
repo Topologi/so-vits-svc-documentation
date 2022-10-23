@@ -67,30 +67,30 @@ datasets 文件夹下包含各中数据集，其中
 > 通常，f0, sounds, speech_units 文件夹都以这个结构来组织数据
 
 - f0
+  - 0
   - 1
   - 2
-  - 3
   - ...
-  - 8
+  - 7
 - sounds
+  - 0
   - 1
-  - 2
-  - 3 
+  - 2 
   - ...
-  - 8
+  - 7
 - speech_units
+  - 0
   - 1
   - 2
-  - 3
   - ...
-  - 8
+  - 7
 - valid
   - f0
+    - 0
     - 1
     - 2
-    - 3
     - ...
-    - 8
+    - 7
   - sounds 
     - ...
 
@@ -99,31 +99,31 @@ datasets 文件夹下包含各中数据集，其中
   - nyarumul.txt
 - nyarumul.txt
 >
-> 这当中，1、2、3 等文件架代表的是某一位歌手的 ID，例如，1的文件夹下应当放置歌手1的声音文件
+> 这当中，0、1、2 等文件夹代表的是某一位歌手的 ID，例如，0的文件夹下应当放置歌手0的声音文件
 
 要进行预处理，首先需要在 datasets/sounds 文件夹下建立子文件夹，举个例子，我如果有两位歌手，则需要新建如下文件夹并放入数据:
 - sounds
-  - 1
+  - 0
     - name1.wav
     - name2.wav
-  - 2
+  - 1
     - 114514.wav
     - jumpstar.wav
 
 同理可得，如果我有三位歌手的数据，那么我需要新建如下文件夹并放入数据
 - sounds
-  - 1
+  - 0
     - aaa.wav
     - bbb.wav
-  - 2
+  - 1
     - wwwa.wav
     - ccad.wav
-  - 3
+  - 2
     - blender.wav
     - c4d.wav
     - minecraft.wav
 
-目前，数据预处理器只支持最多 `8` 位歌手的数据同时存在，当前版本也没有支持单人数据训练，这主要是因为通常情况下，单人模型的效果并不好，我们总是推荐使用
+目前，数据预处理器只支持最多 `8` 位歌手的数据同时存在。单人模型的效果并不好，我们总是推荐使用
 2 人以上的音频数据用于训练。
 
 在完成上述的操作后就可以调用 preprocess_wave.py 文件进行数据处理了
@@ -296,8 +296,5 @@ TODO
 TODO
 
 > PS
-> + midi note（0-127 LongTensor）通过pitch_embedding后与soft-units相加替代vits原本的文本输入
-> + 使用midi而非f0似乎会导致模型音高不准 目前修改回使用F0
-> + 采用了VISinger中的PitchPredictor，引入了PitchLoss修正音高
-> + 似乎效果不是很明显，或许加的方式不太对
-  
+> + F0转换为coarse F0 embedding后与soft-units相加替代vits原本的文本输入
+> + 使用NSF-HiFiGAN 替代了VITS自带的HiFiGAN 感谢[zhaohui8969](https://github.com/zhaohui8969)

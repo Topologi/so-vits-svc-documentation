@@ -95,8 +95,8 @@ def process_wav(wav_path, out_f0, out_speech_units, hubert_net):
         for speaker_id in os.listdir(wav_path):
             if os.path.isfile(os.path.join(wav_path, speaker_id)):
                 continue
-            if not re.match('[1-8]', speaker_id):
-                logger.warning(f'Could not handle speaker with id: {speaker_id}, expected number from 1 to 8')
+            if not re.match('[0-7]', speaker_id):
+                logger.warning(f'Could not handle speaker with id: {speaker_id}, expected number from 0 to 7')
                 continue
             if os.path.isdir(os.path.join(wav_path, speaker_id)):
                 if not os.path.exists(os.path.join(out_f0, speaker_id)):

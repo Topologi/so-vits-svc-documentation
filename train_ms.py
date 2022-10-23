@@ -32,7 +32,6 @@ from losses import (
     kl_loss
 )
 from mel_processing import mel_spectrogram_torch, spec_to_mel_torch
-from text.symbols import symbols
 
 torch.backends.cudnn.benchmark = True
 global_step = 0
@@ -137,7 +136,7 @@ def run(rank, n_gpus, hps):
         初始化生成器模型,GAN
     """
     net_g = SynthesizerTrn(
-        len(symbols),
+        178,
         hps.data.filter_length // 2 + 1,
         hps.train.segment_size // hps.data.hop_length,
         # 多人模型中的新增代码，用于指定训练集中一共有多少个说话人
