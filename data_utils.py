@@ -7,54 +7,65 @@ from mel_processing import spectrogram_torch
 from utils import load_wav_to_torch, load_filepaths_and_text
 
 
-def dropout1d(myarray, ratio=0.5):
-    indices = np.random.choice(np.arange(myarray.size), replace=False,
-                               size=int(myarray.size * ratio))
-    myarray[indices] = 0
-    return myarray
-
-
 class TextAudioLoader(torch.utils.data.Dataset):
     """
-        1) loads audio, text pairs
-        2) normalizes text and converts them to sequences of integers
-        3) computes spectrograms from audio files.
+        1) 加载音频、HuBERT 音素对
+        2) 为音频文件计算并保存时频图
     """
 
     def __init__(self, audiopaths_and_text, hparams):
+        # 加载数据集描述文件（datasets 下面的 txt 文件）
         self.audiopaths_and_text = load_filepaths_and_text(audiopaths_and_text)
+        # SoVits 实际上没有使用的东西
         self.text_cleaners = hparams.text_cleaners
+        # WAV 文件中最大的波长
         self.max_wav_value = hparams.max_wav_value
+        # 请参考 ./documentations/spectrogram.md
+        # 音频文件采样率
         self.sampling_rate = hparams.sampling_rate
+        # 用于时频谱的片段采样长度
         self.filter_length = hparams.filter_length
+        # 用于时频谱的片段间距离
         self.hop_length = hparams.hop_length
+        # Hann 窗长度
         self.win_length = hparams.win_length
+        # 音频采样率
         self.sampling_rate = hparams.sampling_rate
 
+        # SoVits 没有使用
         self.cleaned_text = getattr(hparams, "cleaned_text", False)
 
+        # SoVits 没有使用
         self.add_blank = hparams.add_blank
+        # 标记 HuBERT 最小语素单元数量
         self.min_text_len = getattr(hparams, "min_text_len", 1)
+        # 标记 HuBERT 最大语素单元数量
         self.max_text_len = getattr(hparams, "max_text_len", 190)
 
-        random.seed(1234)
+        # 设置采样随机种子
+        random.seed(getattr(hparams, "train_data_shuffle_seed"), 1234)
+        # 打乱数据集
         random.shuffle(self.audiopaths_and_text)
+        #  处理 HuBERT 音素并存储其时频谱长度
         self._filter()
 
     def _filter(self):
         """
-        Filter text & store spec lengths
+        处理 HuBERT 音素并存储其时频谱长度
         """
         # Store spectrogram lengths for Bucketing
+        # 为 Bucketing 过程创建时频谱长度
         # wav_length ~= file_size / (wav_channels * Bytes per dim) = file_size / (1 * 2)
+        # wav 长度计算公式如上
         # spec_length = wav_length // hop_length
+        # 时频谱长度计算公式如上
         lengths = []
         for audiopath, text, pitch in self.audiopaths_and_text:
             lengths.append(os.path.getsize(audiopath) // (2 * self.hop_length))
         self.lengths = lengths
 
     def get_audio_text_pair(self, audiopath_and_text):
-        # separate filename and text
+        # 获取 HuBERT 因素、时频谱、原音频和 F0
         audiopath, text, pitch = audiopath_and_text[0], audiopath_and_text[1], audiopath_and_text[2]
         text = self.get_text(text)
         spec, wav = self.get_audio(audiopath)
@@ -62,10 +73,11 @@ class TextAudioLoader(torch.utils.data.Dataset):
         return (text, spec, wav, pitch)
 
     def get_pitch(self, pitch):
-
-        return torch.LongTensor(np.load(pitch))
+        # 获取 Pitch
+        return torch.load(pitch)
 
     def get_audio(self, filename):
+        # 获取音频和时频谱，如果没有找到时频谱则创建一个
         audio, sampling_rate = load_wav_to_torch(filename, normalize=False)
         if sampling_rate != self.sampling_rate:
             raise ValueError("{} {} SR doesn't match target {} SR".format(
@@ -84,6 +96,7 @@ class TextAudioLoader(torch.utils.data.Dataset):
         return spec, audio_norm
 
     def get_text(self, text):
+        # 获取 HuBERT 语素
         soft = np.load(text)
         text_norm = torch.FloatTensor(soft)
         return text_norm
@@ -169,18 +182,18 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
          在这里加载训练数据集
          使用配置文件中声明的 training_files 的 txt 引导文件加载数据，同时传入一些从json中读取的配置项目
 
-         text_cleaners: 
+         text_cleaners: 未使用
          max_wav_value: 最大波值
          sampling_rate: 训练音频采样率
-         filter_length: 
-         hop_length: 
-         win_length: 
-         sampling_rate: 
+         filter_length: 时频谱段大小
+         hop_length: 时频谱段间距
+         win_length: Hann 窗口长度
+         sampling_rate: 原始音频采样率
 
-         cleaned_text: 
-         add_blank:
-         min_text_len: 最小文本长度 ( Sovits 中不是文本 )
-         max_text_len: 最大文本长度 ( Sovits 中不是文本 )
+         cleaned_text: 未使用
+         add_blank: 未使用
+         min_text_len: 最小HuBERT 语素单元(n)长度 [HuBERT 张量结构 (n, 256)，其中 256 为 HuBERT 用于描述单个语素的特征向量]
+         max_text_len: 最大HuBERT 语素单元长度
      """
 
     def __init__(self, audiopaths_sid_text, hparams):
@@ -251,7 +264,6 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
     def get_audio(self, filename):
         """
         将声音波形文件加载为时频图，同时返回转换为二维向量的声音张量
-        TODO("可以改写为使用 torchaudio 库直接加载")
         """
         audio, sampling_rate = load_wav_to_torch(filename, False)
         # 训练文件采样率和设置采样率不一样，报错
@@ -309,13 +321,13 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
     """
         返回训练集长度
     """
-
     def __len__(self):
         return len(self.audiopaths_sid_text)
 
 
 class TextAudioSpeakerCollate:
     """ Zero-pads model inputs and targets
+    数据校对器
     """
 
     def __init__(self, return_ids=False):
@@ -392,9 +404,9 @@ class DistributedBucketSampler(torch.utils.data.distributed.DistributedSampler):
         """
             dataset: 数据集
             batch_size: 一批训练数据的大小
-            boundaries: [32, 300, 400, 500, 600, 700, 800, 900, 1000]
+            boundaries: [32, 300, 400, 500, 600, 700, 800, 900, 1000]，时频谱边界范围
             num_replicas: 数据拷贝数量，和 GPU 数量一致
-            rank: 分布式序号
+            rank: 分布式进程序号
             shuffle: 是否打乱训练集
         """
         super().__init__(dataset, num_replicas=num_replicas, rank=rank, shuffle=shuffle)

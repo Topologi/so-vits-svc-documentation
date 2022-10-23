@@ -1,14 +1,12 @@
 # SoftVC-VITS Voice (Singing) Conversion
+> NSF-HiFiGAN Integrated
+## 操作系统兼容性
+- Windows with Nvidia GPU (CUDA)
+- Linux with Nvidia GPU (CUDA)
 
 ## 模型简介
-
-歌声音色转换模型，通过 `HuBERT soft content encoder` 内容编码器提取源音频语音特征，随后根据原始音频生成 `Coarse F0`
-信号并将两者结合输入 VITS 以替换原本的文本输入达到歌声转换的效果。
-> 该midi方案目前暂时搁置转入dev分支，目前模型修改回使用 [coarse F0输入](https://github.com/PlayVoice/VI-SVC/blob/main/svc/prepare/preprocess_wave.py)
-，目前尝试使用[HarmoF0](https://github.com/wx-wei/harmof0) 来进行f0提取
-
-**模型推理、训练、一键脚本汇总整理仓库 [sovits_guide](https://github.com/IceKyrin/sovits_guide)**
-
+歌声音色转换模型，通过 `HuBERT soft content encoder` 内容编码器提取源音频语音特征 `Speech Units` ，随后根据原始音频生成 `Coarse F0 Embedding`
+并将两者相加输入 VITS 以替换原本的文本输入达到歌声转换的效果。
 ## 前置知识
 
 ### 1. [SoftVC](https://github.com/bshall/soft-vc)
@@ -53,7 +51,8 @@ Train 一发文字到语音）的 TTS 模型，透过 VAE、HifiGAN
 TODO(可以先参考源码，源码已经高度注释)
 
 ## 如何训练模型？
-
+### 训练数据要求
+大量 `wav` 文件 (500+)，单声道，32000 采样率，5-20s 均匀分布最佳，只包含人声，单个音频单个说话者。
 ### 数据文件结构与预处理
 
 datasets 文件夹下包含各中数据集，其中
@@ -160,16 +159,16 @@ python preprocess_wave.py -pa true
 > 请确定小猫咪是使用了 http 方式来辅助我们的脚本访问网络，通常情况下，小猫咪提供的是 Socks + HTTP 混合端口，这种端口不确定是否能够为
 > Requests 包提供连接，如果出现问题，请手动声明 http 端口来为脚本提供代理
 
-| 参数   | 参数功能                          | 范例                       | 默认值   |
-|------|-------------------------------|--------------------------|-------|
-| -s   | 指定输入音频目录                      | ./datasets/sounds        | 同范例   |
-| -f   | 指定 F0 输出目录                    | ./datasets/f0            | 同范例   |
-| -u   | 指定 HuBERT 输出目录                | ./datasets/speech_units  | 同范例   |
-| -c   | 指定模型配置文件位置                    | ./configs/nyarumul.json  | 同范例   |
-| -d   | 指定数据描述文件存储位置                  | ./datasets/nyarumul.txt  | 同范例   |
-| -p   | 指定是否使用代理来下载 HuBERT 模型         | http(s)://localhost:7891 | 空白字符串 |
-| -t   | 指定验证集存放位置                     | ./datasets/valid         | 同范例   |
-| - pa | 是否自动分离测试集（如果是第一次使用通常可以打开这个选项） | true                     | false |
+| 参数  | 参数功能                          | 范例                       | 默认值   |
+|-----|-------------------------------|--------------------------|-------|
+| -s  | 指定输入音频目录                      | ./datasets/sounds        | 同范例   |
+| -f  | 指定 F0 输出目录                    | ./datasets/f0            | 同范例   |
+| -u  | 指定 HuBERT 输出目录                | ./datasets/speech_units  | 同范例   |
+| -c  | 指定模型配置文件位置                    | ./configs/nyarumul.json  | 同范例   |
+| -d  | 指定数据描述文件存储位置                  | ./datasets/nyarumul.txt  | 同范例   |
+| -p  | 指定是否使用代理来下载 HuBERT 模型         | http(s)://localhost:7891 | 空白字符串 |
+| -t  | 指定验证集存放位置                     | ./datasets/valid         | 同范例   |
+| -pa | 是否自动分离测试集（如果是第一次使用通常可以打开这个选项） | true                     | false |
 
 在执行完上述指令后，你应该能够发现 `datasets` 文件夹中 `f0`, `sounds` 和 `speech_units`多了很多的数据文件，并且 `datasets`
 目录下出现了 txt 描述文件，恭喜您，这时数据已经准备就绪，我们可以进行模型的训练了！
@@ -194,15 +193,12 @@ nyarumul.json 文件结构如下，需要关注的主要是 `training_files` 和
     "seed": 1234,
     "epochs": 10000,
     "learning_rate": 2e-4,
-    "betas": [
-      0.8,
-      0.99
-    ],
+    "betas": [0.8, 0.99],
     "eps": 1e-9,
-    "batch_size": 8,
+    "batch_size": 24,
     "fp16_run": true,
     "lr_decay": 0.999875,
-    "segment_size": 8192,
+    "segment_size": 7680,
     "init_lr_ratio": 1,
     "warmup_epochs": 0,
     "c_mel": 45,
@@ -213,13 +209,11 @@ nyarumul.json 文件结构如下，需要关注的主要是 `training_files` 和
     "training_files": "./datasets/nyarumul.txt",
     "//validation_files": "指定测试文件索引，也就是上文中生成的测试用 txt 文件",
     "validation_files": "./datasets/valid/nyarumul.txt",
-    "text_cleaners": [
-      "english_cleaners2"
-    ],
+    "text_cleaners":["english_cleaners2"],
     "max_wav_value": 32768.0,
-    "sampling_rate": 22050,
+    "sampling_rate": 32000,
     "filter_length": 1024,
-    "hop_length": 256,
+    "hop_length": 320,
     "win_length": 1024,
     "n_mel_channels": 80,
     "mel_fmin": 0.0,
@@ -230,6 +224,7 @@ nyarumul.json 文件结构如下，需要关注的主要是 `training_files` 和
     "train_data_shuffle_seed": 1234
   },
   "model": {
+    "sampling_rate" : 32000,
     "inter_channels": 192,
     "hidden_channels": 256,
     "filter_channels": 768,
@@ -238,46 +233,17 @@ nyarumul.json 文件结构如下，需要关注的主要是 `training_files` 和
     "kernel_size": 3,
     "p_dropout": 0.1,
     "resblock": "1",
-    "resblock_kernel_sizes": [
-      3,
-      7,
-      11
-    ],
-    "resblock_dilation_sizes": [
-      [
-        1,
-        3,
-        5
-      ],
-      [
-        1,
-        3,
-        5
-      ],
-      [
-        1,
-        3,
-        5
-      ]
-    ],
-    "upsample_rates": [
-      8,
-      8,
-      2,
-      2
-    ],
+    "resblock_kernel_sizes": [3,7,11],
+    "resblock_dilation_sizes": [[1,3,5], [1,3,5], [1,3,5]],
+    "upsample_rates": [10,8,2,2],
     "upsample_initial_channel": 512,
-    "upsample_kernel_sizes": [
-      16,
-      16,
-      4,
-      4
-    ],
+    "upsample_kernel_sizes": [16,16,4,4],
     "n_layers_q": 3,
     "use_spectral_norm": false,
     "gin_channels": 256
   }
 }
+
 ```
 
 训练中的模型将会被存放在 ./logs/模型名称 的文件夹当中，请妥善保管该文件夹。 `数据无价，谨慎操作`
@@ -291,7 +257,7 @@ nyarumul.json 文件结构如下，需要关注的主要是 `training_files` 和
 
 ## 如何使用模型？
 ### 载入模型参数和权值以进行输出
-TODO
+TODO("请先参见 [推理 Jupyter](./inference.ipynb))
 ### 如何使用 VST 插件来和 Studio One 等机架通信以达到实时效果
 TODO
 

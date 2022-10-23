@@ -38,10 +38,11 @@ global_step = 0
 
 
 def main():
+    # 获取 matplotlib 的日志，设置级别为 WARNING，防止出现一堆 DEBUG
     matplotlib_logger = logging.getLogger("matplotlib")
     if matplotlib_logger is not None:
         matplotlib_logger.setLevel(logging.WARNING)
-    """假设单节点多GPU训练"""
+    """假设单节点多GPU训练，设备没 GPU 不允许训练"""
     assert torch.cuda.is_available(), "CPU training is not allowed."
 
     """查看当前设备 GPU 总数"""
@@ -77,17 +78,21 @@ def run(rank, n_gpus, hps):
         # 同上，不过是用于模型 eval 时的日志
         writer_eval = SummaryWriter(log_dir=os.path.join(hps.model_dir, "eval"))
 
-    # 启动 torch 分布式，使用 nccl 后端，初始化方法为 env schema，世界大小和 gpu 数量同步，传入 rank
+    # 根据操作系统创建不同的进程组，采取本机环境以使用本机多张显卡。
     if platform.system() == 'Windows':
+        # 如果是 Windows 则采取 Gloo 后端实现
         logger.info('Running on windows, launching gloo as distribute system backend')
         dist.init_process_group(backend='gloo', init_method='env://', world_size=n_gpus, rank=rank)
     elif platform.system() == 'Linux':
+        # 如果是 Linux 则采取 Nccl 实现
         logger.info('Running on Linux, launching gloo as distribute system backend')
         dist.init_process_group(backend='nccl', init_method='env://', world_size=n_gpus, rank=rank)
     elif platform.system() == 'Darwin':
+        # MacOS 不支持
         logger.error('MacOS is not supported yet')
         return
     else:
+        # 其他系统不支持
         logger.info(f'Unsupported operating system: {platform.system()}')
         return
     # 加载手动设置的训练种子
@@ -102,8 +107,8 @@ def run(rank, n_gpus, hps):
         text_cleaners:  SoVits 不适用
         max_wav_value: 最大波值
         sampling_rate: 训练音频采样率
-        filter_length: 
-        hop_length: 
+        filter_length: 短时傅里叶变换单片音频长度
+        hop_length: 短时傅里叶变化滑动长度
         win_length: 滑动窗口大小
         sampling_rate: 数据集中音频采样率 
         
