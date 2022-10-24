@@ -13,16 +13,6 @@ import utils
 from hubert import encode
 
 
-# Thanks to IceKyrin
-# https://github.com/IceKyrin/sovits_guide
-def resize2d(x, target_len):
-    source = np.array(x)
-    source[source < 0.001] = np.nan
-    target = np.interp(np.arange(0, len(source) * target_len, len(source)) / target_len, np.arange(0, len(source)),
-                       source)
-    res = np.nan_to_num(target)
-    return res
-
 
 def get_logger():
     fo = '%(asctime)s %(message)s'
@@ -130,7 +120,7 @@ def process_wav(wav_path, out_f0, out_speech_units, hubert_net):
                         soft = torch.load(os.path.join(out_speech_units, speaker_id, f'{file}.pt'))
                         feature_pit = feature_input.compute_f0(audio_path)
                         # 标准化 f0 尺寸，与 HuBERT 输出对应
-                        feature_pit = resize2d(feature_pit, soft.shape[0])
+                        feature_pit = utils.resize_2d(feature_pit, soft.shape[0])
                         coarse_pit = feature_input.coarse_f0(feature_pit)
 
                         torch.save(

@@ -7,11 +7,23 @@ import json
 import subprocess
 import torchaudio
 import torch
+import numpy as np
 
 MATPLOTLIB_FLAG = False
 
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 logger = logging
+
+
+# Thanks to IceKyrin
+# https://github.com/IceKyrin/sovits_guide
+def resize_2d(x, target_len):
+    source = np.array(x)
+    source[source < 0.001] = np.nan
+    target = np.interp(np.arange(0, len(source) * target_len, len(source)) / target_len, np.arange(0, len(source)),
+                       source)
+    res = np.nan_to_num(target)
+    return res
 
 
 def load_checkpoint(checkpoint_path, model, optimizer=None):
